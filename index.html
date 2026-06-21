@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jobs4Youth Hub</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">J4Y</div>
+        <div>
+          <h1>Jobs4Youth</h1>
+          <span>Youth jobs, internships and skills hub</span>
+        </div>
+      </div>
+      <div class="nav" id="nav"></div>
+      <div class="demo">
+        <b>Live platform mode</b><br/>
+        This version is designed to connect to Supabase for authentication, data storage and role-based workflows.
+      </div>
+    </aside>
+    <main class="main">
+      <section class="top">
+        <div>
+          <div class="kicker" id="kicker">Live platform</div>
+          <h2 id="pageTitle">Youth dashboard</h2>
+          <p id="pageDesc">Connect young people to jobs, internships, training providers, employers and labour market intelligence.</p>
+          <div class="auth-box">
+            <button class="secondary" id="btnSignIn">Sign in / Sign up</button>
+            <button class="secondary" id="btnSignOut">Sign out</button>
+            <span class="label" id="authStatus">Not connected</span>
+          </div>
+        </div>
+        <div class="role-switch" id="roleSwitch"></div>
+      </section>
+      <div id="content"></div>
+      <div class="footer-note">Jobs4Youth Hub • live MVP starter • Supabase ready</div>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="authModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="authTitle">Sign in to Jobs4Youth</h3>
+        <button class="secondary" id="closeAuthModal">Close</button>
+      </div>
+      <div class="auth-tabs">
+        <button class="secondary active" id="tabLogin">Sign In</button>
+        <button class="secondary" id="tabSignup">Sign Up</button>
+      </div>
+      <div class="form" style="margin-top:12px">
+        <label class="full" id="fullNameWrap" style="display:none;">
+          Full name
+          <input id="authFullName" placeholder="Enter your full name" />
+        </label>
+        <label>
+          Email
+          <input id="authEmail" type="email" placeholder="Enter your email" />
+        </label>
+        <label>
+          Password
+          <input id="authPassword" type="password" placeholder="Enter your password" />
+        </label>
+        <label class="full" id="roleWrap" style="display:none;">
+          Role
+          <select id="authRole">
+            <option value="youth">Youth</option>
+            <option value="employer">Employer</option>
+            <option value="institution">Institution</option>
+          </select>
+        </label>
+        <button class="primary full" id="authSubmitBtn">Sign In</button>
+        <div class="label full" id="authMessage"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
