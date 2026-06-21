@@ -89,7 +89,6 @@ function matchScore(job) {
     state.profile.country,
     state.profile.education
   ].join(' ')));
-
   const js = words([
     job.skills,
     job.region,
@@ -98,10 +97,8 @@ function matchScore(job) {
     job.experience,
     job.education
   ].join(' '));
-
   let hit = 0;
   js.forEach(w => { if (ps.has(w)) hit += 1; });
-
   let base = Math.round((hit / Math.max(js.length, 1)) * 70) + 20;
   if ((job.region || '') === (state.profile.region || '')) base += 10;
   if ((job.country || '') === (state.profile.country || '')) base += 6;
@@ -109,14 +106,17 @@ function matchScore(job) {
 }
 
 function navItems() {
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'about'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'about'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'about'];
-  return ['dashboard', 'verification', 'insights', 'about'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'about', 'privacy', 'terms', 'contact'];
 }
 
 function desc() {
   if (state.view === 'about') return 'Learn what Jobs4Youth is, who it serves, and why it exists.';
+  if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
+  if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
+  if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
   if (state.role === 'employer') return 'Post opportunities and shortlist best-fit young candidates.';
   if (state.role === 'institution') return 'Publish courses and align training to real market demand.';
@@ -158,8 +158,7 @@ function syncProfileToState(profile) {
 
 async function ensureProfile(user) {
   if (!isConfigured || !user) return null;
-  const { data: existingProfile, error: fetchError } = await supabase
-    .from('profiles').select('*').eq('id', user.id).maybeSingle();
+  const { data: existingProfile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
   if (fetchError) {
     console.error('Error loading profile:', fetchError);
     return null;
@@ -179,14 +178,12 @@ async function ensureProfile(user) {
     console.error('Error creating profile:', insertError);
     return null;
   }
-  if (['employer','institution'].includes(safeRole)) {
-    await ensureVerificationRequest(createdProfile, safeRole);
-  }
+  if (['employer', 'institution'].includes(safeRole)) await ensureVerificationRequest(createdProfile, safeRole);
   return createdProfile;
 }
 
 async function ensureVerificationRequest(profile, role) {
-  if (!isConfigured || !currentUser || !profile || !['employer','institution'].includes(role)) return;
+  if (!isConfigured || !currentUser || !profile || !['employer', 'institution'].includes(role)) return;
   const { data: existing } = await supabase
     .from('verification_queue')
     .select('id')
@@ -194,7 +191,6 @@ async function ensureVerificationRequest(profile, role) {
     .eq('item_type', role)
     .limit(1);
   if (existing && existing.length) return;
-
   const { error } = await supabase.from('verification_queue').insert([
     { profile_id: currentUser.id, item_type: role, item_id: null, review_status: 'Pending' }
   ]);
@@ -396,10 +392,22 @@ function actionSelect(label, id, options, selected, placeholder='Select option')
   `;
 }
 
+function trustPageShell(kicker, heading, bodyHtml) {
+  return `
+    <div class="grid">
+      <div class="card span-12">
+        <div class="kicker">${escapeHtml(kicker)}</div>
+        <h3 style="margin-top:8px;">${escapeHtml(heading)}</h3>
+        ${bodyHtml}
+      </div>
+    </div>
+  `;
+}
+
 function youthDash() {
   const ranked = [...state.jobs].sort((a, b) => matchScore(b) - matchScore(a));
   return `
-    <div class="notice"><b>Professional upgrade:</b> structured drop-down fields have been added for cleaner, more consistent data entry across the platform.</div>
+    <div class="notice"><b>Professional upgrade:</b> structured drop-down fields and public trust pages have been added for a more professional public-facing platform.</div>
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-8">
@@ -415,9 +423,7 @@ function youthDash() {
 }
 
 function opportunities() {
-  return `
-    <div class="grid"><div class="card span-12"><div class="section-title"><h3>Opportunity marketplace</h3></div>${[...state.jobs].sort((a, b) => matchScore(b) - matchScore(a)).map(j => jobCard(j, true)).join('') || '<p class="label">No opportunities available yet.</p>'}</div></div>
-  `;
+  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Opportunity marketplace</h3></div>${[...state.jobs].sort((a,b)=>matchScore(b)-matchScore(a)).map(j=>jobCard(j,true)).join('') || '<p class="label">No opportunities available yet.</p>'}</div></div>`;
 }
 
 function training() {
@@ -453,37 +459,28 @@ function youthProfileForm() {
   `;
 }
 
-function employerProfileForm() {
+function organizationProfileForm(label) {
   return `
     <div class="form">
       <label>Contact person / name<input id="orgProfileName" value="${escapeHtml(state.profile.name || '')}"/></label>
-      <label>Organisation name<input id="orgName" value="${escapeHtml(state.profile.organizationName || '')}"/></label>
+      <label>${escapeHtml(label)}<input id="orgName" value="${escapeHtml(state.profile.organizationName || '')}"/></label>
       ${actionSelect('Sector','orgSector', OPTION_SETS.sectors, state.profile.sector, 'Choose sector')}
       ${actionSelect('Country','orgCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
       <label>Region / City<input id="orgRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
-      <div class="full notice"><b>Verification status:</b> ${state.profile.verified ? 'Verified organisation' : 'Pending admin verification'}</div>
+      <div class="full notice"><b>Verification status:</b> ${state.profile.verified ? 'Verified' : 'Pending admin verification'}</div>
       <button class="primary full" onclick="saveOrganizationProfile()">Save organisation profile</button>
     </div>
   `;
 }
 
-function institutionProfileForm() {
-  return `
-    <div class="form">
-      <label>Contact person / name<input id="orgProfileName" value="${escapeHtml(state.profile.name || '')}"/></label>
-      <label>Institution name<input id="orgName" value="${escapeHtml(state.profile.organizationName || '')}"/></label>
-      ${actionSelect('Sector','orgSector', OPTION_SETS.sectors, state.profile.sector, 'Choose sector')}
-      ${actionSelect('Country','orgCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-      <label>Region / City<input id="orgRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
-      <div class="full notice"><b>Verification status:</b> ${state.profile.verified ? 'Verified institution' : 'Pending admin verification'}</div>
-      <button class="primary full" onclick="saveOrganizationProfile()">Save institution profile</button>
-    </div>
-  `;
-}
-
 function profile() {
-  const content = state.role === 'youth' ? youthProfileForm() : state.role === 'employer' ? employerProfileForm() : institutionProfileForm();
-  return `<div class="card"><h3>${state.role === 'youth' ? 'Youth profile' : state.role === 'employer' ? 'Employer profile' : 'Institution profile'}</h3>${content}</div>`;
+  const content = state.role === 'youth'
+    ? youthProfileForm()
+    : state.role === 'employer'
+    ? organizationProfileForm('Organisation name')
+    : organizationProfileForm('Institution name');
+  const heading = state.role === 'youth' ? 'Youth profile' : state.role === 'employer' ? 'Employer profile' : 'Institution profile';
+  return `<div class="card"><h3>${heading}</h3>${content}</div>`;
 }
 
 function employerDash() {
@@ -528,7 +525,6 @@ window.submitOpportunity = async function() {
   if (userError || !user) { if (msg) msg.textContent = 'Please sign in first.'; return; }
   const profile = await ensureProfile(user);
   if (!profile || !['employer','admin'].includes(profile.role)) { if (msg) msg.textContent = 'Only employer or admin accounts can post opportunities.'; return; }
-
   const payload = {
     posted_by: user.id,
     title: document.getElementById('oppTitle')?.value.trim() || '',
@@ -546,7 +542,6 @@ window.submitOpportunity = async function() {
     if (msg) msg.textContent = 'Please fill in title, organization, country, type and description.';
     return;
   }
-
   const { data: inserted, error } = await supabase.from('opportunities').insert([payload]).select().single();
   if (error) { console.error('Opportunity insert error:', error); if (msg) msg.textContent = `Failed to post opportunity: ${error.message}`; return; }
   const { error: queueError } = await supabase.from('verification_queue').insert([{ profile_id: user.id, item_type: 'opportunity', item_id: inserted.id, review_status: 'Pending' }]);
@@ -605,7 +600,6 @@ window.submitCourse = async function() {
   if (userError || !user) { if (msg) msg.textContent = 'Please sign in first.'; return; }
   const profile = await ensureProfile(user);
   if (!profile || !['institution','admin'].includes(profile.role)) { if (msg) msg.textContent = 'Only institution or admin accounts can post training.'; return; }
-
   const payload = {
     posted_by: user.id,
     title: document.getElementById('courseTitle')?.value.trim() || '',
@@ -669,9 +663,7 @@ function adminDash() {
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
   const reviewed = state.verificationItems.filter(i => i.reviewStatus !== 'Pending');
-  return `
-    <div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>
-  `;
+  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
 }
 
 window.refreshAdminQueue = async function() { await loadVerificationQueueFromSupabase(); render(); };
@@ -684,7 +676,6 @@ window.reviewVerification = async function(queueId, decision) {
   if (!item) { if (msg) msg.textContent = 'Verification item not found.'; return; }
   const approved = decision === 'Approved';
   const note = prompt(`Optional admin note for ${decision.toLowerCase()}:`, '') || '';
-
   if (['employer','institution'].includes(item.itemType)) {
     const { error } = await supabase.from('profiles').update({ verified: approved, updated_at: new Date().toISOString() }).eq('id', item.profileId);
     if (error) { if (msg) msg.textContent = `Failed to update profile verification: ${error.message}`; return; }
@@ -701,7 +692,6 @@ window.reviewVerification = async function(queueId, decision) {
     const { error } = await supabase.from('courses').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update course: ${error.message}`; return; }
   }
-
   const { error: queueError } = await supabase.from('verification_queue').update({ review_status: approved ? 'Approved' : 'Rejected', reviewer_id: currentUser.id, review_notes: note, updated_at: new Date().toISOString() }).eq('id', queueId);
   if (queueError) { if (msg) msg.textContent = `Failed to update verification queue: ${queueError.message}`; return; }
   await loadJobsFromSupabase();
@@ -712,7 +702,7 @@ window.reviewVerification = async function(queueId, decision) {
 };
 
 function insights() {
-  return `<div class="grid"><div class="card span-12"><h3>Skills demand dashboard</h3>${bar('Food safety', 92)}${bar('Packaging', 78)}${bar('Record keeping', 74)}${bar('Dairy', 63)}${bar('Mechanization', 58)}${bar('Quality control', 57)}</div></div>`;
+  return trustPageShell('Insights', 'Skills demand dashboard', `${bar('Food safety', 92)}${bar('Packaging', 78)}${bar('Record keeping', 74)}${bar('Dairy', 63)}${bar('Mechanization', 58)}${bar('Quality control', 57)}`);
 }
 
 function about() {
@@ -747,17 +737,83 @@ function about() {
         <p>Jobs4Youth is being built as a professional public service platform. That means the platform prioritises structured forms, verification, responsible moderation, consistent data capture and clear governance.</p>
         <p class="label">Public launch readiness will also include a custom domain, legal pages, support contacts and stronger user guidance.</p>
       </div>
-      <div class="card span-12">
-        <h3>How the platform works</h3>
-        <div class="grid">
-          <div class="span-3"><p><b>1. Create an account</b><br><span class="label">Sign up as youth, employer or institution.</span></p></div>
-          <div class="span-3"><p><b>2. Complete your profile</b><br><span class="label">Use structured fields to improve matching and reporting.</span></p></div>
-          <div class="span-3"><p><b>3. Post or apply</b><br><span class="label">Employers and institutions publish opportunities; youth apply.</span></p></div>
-          <div class="span-3"><p><b>4. Verify and monitor</b><br><span class="label">Administrators review organisations and listings before approval.</span></p></div>
-        </div>
-      </div>
     </div>
   `;
+}
+
+function privacy() {
+  return trustPageShell('Privacy Policy', 'How Jobs4Youth handles personal information', `
+    <p><b>Last updated:</b> June 2026</p>
+    <p>Jobs4Youth is committed to protecting the privacy and security of all users. This Privacy Policy explains what information may be collected, how that information is used, and the steps taken to protect it.</p>
+    <h4>Information we may collect</h4>
+    <ul>
+      <li>Name, email address and account role</li>
+      <li>Country, region and profile information</li>
+      <li>Education, skills, interests and employment preferences</li>
+      <li>Organisation information for employers and training institutions</li>
+      <li>Application and posting activity on the platform</li>
+    </ul>
+    <h4>How information is used</h4>
+    <ul>
+      <li>To create and manage user accounts</li>
+      <li>To match youth with opportunities and training offers</li>
+      <li>To support recruitment and course applications</li>
+      <li>To improve the platform and generate aggregated insights</li>
+      <li>To maintain quality, moderation and verification workflows</li>
+    </ul>
+    <h4>Information sharing</h4>
+    <p>Jobs4Youth does not sell personal information. Information may be shared between applicants and employers, or between applicants and institutions, only where required to support legitimate platform functions. Information may also be disclosed when required by law.</p>
+    <h4>Data protection</h4>
+    <p>Reasonable technical and organisational measures are used to protect information from unauthorised access, disclosure, loss or misuse. Users are encouraged to keep passwords secure and report any suspicious activity promptly.</p>
+    <h4>User choices and rights</h4>
+    <p>Users may request review, correction or deletion of their information, subject to applicable legal and operational requirements.</p>
+  `);
+}
+
+function terms() {
+  return trustPageShell('Terms of Use', 'Rules for using Jobs4Youth responsibly', `
+    <p>By accessing or using Jobs4Youth, users agree to use the platform lawfully, responsibly and in accordance with these Terms of Use.</p>
+    <h4>User responsibilities</h4>
+    <ul>
+      <li>Provide accurate and up-to-date account information</li>
+      <li>Maintain the confidentiality of login credentials</li>
+      <li>Use the platform only for legitimate employment and training purposes</li>
+      <li>Respect other users and avoid misleading or harmful behaviour</li>
+    </ul>
+    <h4>Prohibited conduct</h4>
+    <ul>
+      <li>Posting false, deceptive or fraudulent opportunities</li>
+      <li>Impersonating individuals or organisations</li>
+      <li>Uploading harmful content or attempting unauthorised access</li>
+      <li>Using the platform for unlawful, abusive or misleading purposes</li>
+    </ul>
+    <h4>Employer and institution obligations</h4>
+    <p>Employers and training institutions are responsible for ensuring that the opportunities, courses and organisation details they publish are accurate, lawful and professional. Jobs4Youth reserves the right to review, verify, approve, reject or remove content as needed.</p>
+    <h4>No guaranteed outcomes</h4>
+    <p>Jobs4Youth facilitates connections between users but does not guarantee job placement, training admission, interview selection or hiring outcomes.</p>
+    <h4>Updates to these terms</h4>
+    <p>These Terms may be updated periodically. Continued use of the platform after updates indicates acceptance of the revised terms.</p>
+  `);
+}
+
+function contact() {
+  return trustPageShell('Contact Jobs4Youth', 'Get support, share feedback or explore partnerships', `
+    <p>Jobs4Youth welcomes feedback, technical support requests and partnership enquiries.</p>
+    <h4>Contact categories</h4>
+    <ul>
+      <li>Technical support</li>
+      <li>Employer support</li>
+      <li>Training institution support</li>
+      <li>Partnership and collaboration inquiries</li>
+      <li>General questions and user feedback</li>
+    </ul>
+    <h4>Suggested contact details</h4>
+    <p><b>Email:</b> info@jobs4youth.org</p>
+    <p><b>Support:</b> support@jobs4youth.org</p>
+    <p class="label">You can replace these placeholder contact addresses with your organisation’s official support email addresses before public launch.</p>
+    <h4>Response approach</h4>
+    <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
+  `);
 }
 
 function bar(label, n) {
@@ -768,10 +824,13 @@ function render() {
   renderShell();
   let c = '';
   if (state.view === 'about') c = about();
+  else if (state.view === 'privacy') c = privacy();
+  else if (state.view === 'terms') c = terms();
+  else if (state.view === 'contact') c = contact();
   else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : about();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : contact();
   document.getElementById('content').innerHTML = c;
 }
 
@@ -837,7 +896,6 @@ async function handleAuthSubmit() {
     }
     syncProfileToState(profile);
   }
-
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
   await loadApplicationsFromSupabase();
@@ -861,7 +919,6 @@ window.saveProfile = async function () {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const user = userData?.user;
   if (userError || !user) return alert('Please sign in first.');
-
   const updates = {
     full_name: document.getElementById('profileName')?.value || '',
     country: document.getElementById('profileCountry')?.value || '',
@@ -873,10 +930,9 @@ window.saveProfile = async function () {
     interests: document.getElementById('profileInterests')?.value || '',
     updated_at: new Date().toISOString()
   };
-
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) return alert(`❌ Failed to save profile: ${error.message}`);
-  syncProfileToState({ ...state.profile, ...updates, role: state.role, verified: state.profile.verified, organization_name: state.profile.organizationName, sector: state.profile.sector });
+  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
   alert('✅ Profile saved successfully!');
   render();
 };
@@ -886,7 +942,6 @@ window.saveOrganizationProfile = async function () {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const user = userData?.user;
   if (userError || !user) return alert('Please sign in first.');
-
   const updates = {
     full_name: document.getElementById('orgProfileName')?.value || '',
     organization_name: document.getElementById('orgName')?.value || '',
@@ -895,7 +950,6 @@ window.saveOrganizationProfile = async function () {
     region: document.getElementById('orgRegion')?.value || '',
     updated_at: new Date().toISOString()
   };
-
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) return alert(`❌ Failed to save organisation profile: ${error.message}`);
   state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
