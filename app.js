@@ -314,7 +314,7 @@ function onboardingMessage() {
     const completion = organisationProfileCompletion();
     if (!state.profile.organizationName || completion < 80) return {
       title: 'Complete your organisation profile first',
-      text: `Your employer profile is ${completion}% complete. Add organisation details before posting to present a stronger public-facing profile.`,
+      text: `Your employer profile is ${completion}% complete. Add organisation details before posting to present a stronger public facing profile.`,
       action: `<button class="secondary" onclick="setView('profile')">Complete profile</button>`
     };
     if (!state.profile.verified) return {
@@ -323,7 +323,7 @@ function onboardingMessage() {
       action: `<button class="secondary" onclick="setView('profile')">Review organisation profile</button>`
     };
     return {
-      title: 'Your employer profile is public-ready',
+      title: 'Your employer profile is public ready',
       text: 'Continue posting moderated opportunities and reviewing fit-for-role candidates through the platform.',
       action: `<button class="secondary" onclick="setView('post opportunity')">Post opportunity</button>`
     };
@@ -910,7 +910,7 @@ function home() {
     <div class="grid home-grid">
       <div class="card span-8 hero-card">
         <div class="hero-copy">
-          <div class="kicker">Public launch platform</div>
+          <div class="kicker">Public continental platform</div>
           <h3 class="hero-title">Verified youth opportunities, internships and skills pathways in one trusted platform</h3>
           <p class="hero-text">Jobs4Youth helps young people discover credible opportunities, supports employers to reach job-ready talent, and enables institutions to publish relevant training offers across African labour markets.</p>
           <div class="hero-actions">
@@ -979,7 +979,7 @@ function home() {
       </div>
 
       <div class="card span-12 trust-strip">
-        <div class="section-title"><h3>Built for public trust and real-world use</h3><span class="pill pill-verified">Moderated platform</span></div>
+        <div class="section-title"><h3>Built for public trust and real world use</h3><span class="pill pill-verified">Moderated platform</span></div>
         <div class="trust-grid">
           <div class="trust-card">
             <h4>Verification-first publishing</h4>
@@ -991,7 +991,7 @@ function home() {
           </div>
           <div class="trust-card">
             <h4>Actionable pathways for youth</h4>
-            <p class="label">Jobs4Youth is not only a vacancy site — it also connects opportunities, training and labour market signals in one evolving ecosystem.</p>
+            <p class="label">Jobs4Youth is not only a vacancy site, it also connects opportunities, training and labour market signals in one evolving ecosystem.</p>
           </div>
         </div>
       </div>
