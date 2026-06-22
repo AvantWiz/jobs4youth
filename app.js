@@ -891,126 +891,240 @@ function about() {
     <div class="grid">
       <div class="card span-8">
         <div class="kicker">About Jobs4Youth</div>
-        <h3 style="margin-top:8px;">A professional jobs, internships and skills platform for young people</h3>
-        <p>Jobs4Youth is designed to connect young people to verified employment, internship, apprenticeship and training opportunities in a structured, trusted and accessible digital environment. The platform brings together youth, employers, training institutions and administrators in one coordinated ecosystem.</p>
-        <p>Our goal is simple: reduce the gap between youth talent and real opportunities by making labour market information easier to access, easier to trust and easier to act on.</p>
-        <div class="notice"><b>Why this matters:</b> many young people struggle to find credible vacancies, while employers and training providers struggle to reach the right candidates. Jobs4Youth exists to make that connection faster, safer and more transparent.</div>
+        <h3 style="margin-top:8px;">A trusted platform connecting youth talent to real opportunities</h3>
+        <p>Jobs4Youth is a professional employment and skills platform designed to connect young people with verified jobs, internships, apprenticeships and training opportunities in one coordinated digital space.</p>
+        <p>The platform brings together youth, employers, training institutions and administrators through structured workflows that support opportunity discovery, application management, verification and responsible moderation.</p>
+        <div class="notice"><b>Our purpose:</b> reduce the gap between youth potential and labour market access by making opportunities easier to discover, easier to trust and easier to act on.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+          <button class="primary" onclick="setView('opportunities')">Browse opportunities</button>
+          <button class="secondary" onclick="setView('training')">Explore training</button>
+          <button class="secondary" onclick="setView('contact')">Contact the platform team</button>
+        </div>
       </div>
       <div class="card span-4">
-        <h3>Who the platform serves</h3>
-        <p><b>Youth job seekers</b><br><span class="label">Find opportunities matched to skills, education and location.</span></p>
-        <p><b>Employers</b><br><span class="label">Publish vacancies and review candidate applications in one place.</span></p>
-        <p><b>Training institutions</b><br><span class="label">Promote programmes that respond to real market demand.</span></p>
-        <p><b>Administrators</b><br><span class="label">Strengthen trust through verification and moderation.</span></p>
+        <h3>Who Jobs4Youth serves</h3>
+        <p><b>Youth job seekers</b><br><span class="label">Find verified opportunities matched to skills, interests, education and location.</span></p>
+        <p><b>Employers</b><br><span class="label">Publish vacancies and manage candidate applications in one place.</span></p>
+        <p><b>Training institutions</b><br><span class="label">Promote programmes aligned to real labour market demand.</span></p>
+        <p><b>Administrators</b><br><span class="label">Strengthen trust through verification, moderation and oversight.</span></p>
       </div>
-      <div class="card span-6">
-        <h3>Core value proposition</h3>
-        <ul>
-          <li>Verified opportunity listings and moderation workflows</li>
-          <li>Structured user profiles and cleaner data entry through drop-down fields</li>
-          <li>Role-based dashboards for youth, employers, institutions and admin users</li>
-          <li>Opportunity, training and application management in one place</li>
-          <li>Labour market analytics and youth employment reporting</li>
-        </ul>
+      <div class="card span-4">
+        <h3>Platform features</h3>
+        <p class="label">Verified listings, structured profiles, role-based dashboards, application workflows, training pathways and accountability through moderation.</p>
+        <div>
+          <span class="pill">Verified opportunities</span>
+          <span class="pill">Skills visibility</span>
+          <span class="pill">Training alignment</span>
+          <span class="pill">Employer review</span>
+          <span class="pill">Admin governance</span>
+        </div>
       </div>
-      <div class="card span-6">
+      <div class="card span-4">
         <h3>Professional standards</h3>
-        <p>Jobs4Youth operates as a professional public service platform with structured forms, verification, responsible moderation, consistent data capture and clear governance.</p>
+        <p>Jobs4Youth operates with structured data capture, role-based access, moderation workflows, transparent public information pages and professional support channels.</p>
+        <p class="label">The platform is designed for practical public use, not just demonstration.</p>
+      </div>
+      <div class="card span-4">
+        <h3>Public contact channels</h3>
+        <p><b>General enquiries:</b><br><span class="label">info@jobs4youth.org</span></p>
+        <p><b>Support:</b><br><span class="label">support@jobs4youth.org</span></p>
+        <p><b>Partnerships:</b><br><span class="label">partnerships@jobs4youth.org</span></p>
       </div>
     </div>
   `;
 }
 
 function privacy() {
-  return trustPageShell('Privacy Policy', 'How Jobs4Youth handles personal information', `
-    <p><b>Last updated:</b> June 2026</p>
-    <p>Jobs4Youth is committed to protecting the privacy and security of all users. This Privacy Policy explains what information may be collected, how that information is used, and the steps taken to protect it.</p>
-    <h4>Information we may collect</h4>
-    <ul>
-      <li>Name, email address and account role</li>
-      <li>Country, region and profile information</li>
-      <li>Education, skills, interests and employment preferences</li>
-      <li>Organisation information for employers and training institutions</li>
-      <li>Application and posting activity on the platform</li>
-    </ul>
-    <h4>How information is used</h4>
-    <ul>
-      <li>To create and manage user accounts</li>
-      <li>To match youth with opportunities and training offers</li>
-      <li>To support recruitment and course applications</li>
-      <li>To improve the platform and generate aggregated insights</li>
-      <li>To maintain quality, moderation and verification workflows</li>
-    </ul>
-    <h4>Information sharing</h4>
-    <p>Jobs4Youth does not sell personal information. Information may be shared between applicants and employers, or between applicants and institutions, only where required to support legitimate platform functions. Information may also be disclosed when required by law.</p>
-    <h4>Data protection</h4>
-    <p>Reasonable technical and organisational measures are used to protect information from unauthorised access, disclosure, loss or misuse. Users are encouraged to keep passwords secure and report any suspicious activity promptly.</p>
-    <h4>User choices and rights</h4>
-    <p>Users may request review, correction or deletion of their information, subject to applicable legal and operational requirements.</p>
-  `);
+  return `
+    <div class="grid">
+      <div class="card span-8">
+        <div class="kicker">Privacy Policy</div>
+        <h3 style="margin-top:8px;">How Jobs4Youth handles personal information</h3>
+        <p><b>Last updated:</b> June 2026</p>
+        <p>Jobs4Youth is committed to protecting personal information and using platform data responsibly. This page explains what information may be collected, how it may be used, and the practical safeguards applied to reduce misuse and unauthorised access.</p>
+        <h4>Information that may be collected</h4>
+        <ul>
+          <li>Name, email address and account role</li>
+          <li>Country, region and user profile details</li>
+          <li>Education, skills, interests and employment preferences</li>
+          <li>Organisation information for employers and training institutions</li>
+          <li>Application, posting and platform activity records</li>
+        </ul>
+        <h4>How information may be used</h4>
+        <ul>
+          <li>To create and manage user accounts</li>
+          <li>To support matching between youth, employers and training providers</li>
+          <li>To enable application review, posting workflows and moderation</li>
+          <li>To improve services and generate aggregated platform insights</li>
+          <li>To uphold quality control, governance and user safety</li>
+        </ul>
+        <h4>Data sharing approach</h4>
+        <p>Jobs4Youth does not sell personal information. Information is only shared where it supports legitimate platform functions such as recruitment, course applications, moderation or legal compliance.</p>
+        <h4>Protection measures</h4>
+        <p>Reasonable technical and organisational measures are used to protect data. Users are encouraged to keep passwords secure and report suspicious activity promptly through the platform support channels.</p>
+      </div>
+      <div class="card span-4">
+        <h3>Privacy quick summary</h3>
+        <div class="notice"><b>In short:</b> Jobs4Youth uses data to operate the platform, support legitimate opportunity matching and maintain platform quality.</div>
+        <p><b>Questions about privacy?</b><br><span class="label">Contact: support@jobs4youth.org</span></p>
+        <button class="secondary" onclick="setView('contact')">Open contact page</button>
+      </div>
+    </div>
+  `;
 }
 
 function terms() {
-  return trustPageShell('Terms of Use', 'Rules for using Jobs4Youth responsibly', `
-    <p>By accessing or using Jobs4Youth, users agree to use the platform lawfully, responsibly and in accordance with these Terms of Use.</p>
-    <h4>User responsibilities</h4>
-    <ul>
-      <li>Provide accurate and up-to-date account information</li>
-      <li>Maintain the confidentiality of login credentials</li>
-      <li>Use the platform only for legitimate employment and training purposes</li>
-      <li>Respect other users and avoid misleading or harmful behaviour</li>
-    </ul>
-    <h4>Prohibited conduct</h4>
-    <ul>
-      <li>Posting false, deceptive or fraudulent opportunities</li>
-      <li>Impersonating individuals or organisations</li>
-      <li>Uploading harmful content or attempting unauthorised access</li>
-      <li>Using the platform for unlawful, abusive or misleading purposes</li>
-    </ul>
-    <h4>Employer and institution obligations</h4>
-    <p>Employers and training institutions are responsible for ensuring that the opportunities, courses and organisation details they publish are accurate, lawful and professional. Jobs4Youth reserves the right to review, verify, approve, reject or remove content as needed.</p>
-    <h4>No guaranteed outcomes</h4>
-    <p>Jobs4Youth facilitates connections between users but does not guarantee job placement, training admission, interview selection or hiring outcomes.</p>
-    <h4>Updates to these terms</h4>
-    <p>These Terms may be updated periodically. Continued use of the platform after updates indicates acceptance of the revised terms.</p>
-  `);
+  return `
+    <div class="grid">
+      <div class="card span-8">
+        <div class="kicker">Terms of Use</div>
+        <h3 style="margin-top:8px;">Rules for using Jobs4Youth responsibly</h3>
+        <p>By accessing or using Jobs4Youth, users agree to use the platform lawfully, professionally and in line with these Terms of Use.</p>
+        <h4>User responsibilities</h4>
+        <ul>
+          <li>Provide accurate and current account information</li>
+          <li>Maintain the confidentiality of login credentials</li>
+          <li>Use the platform for legitimate employment, training and partnership purposes</li>
+          <li>Respect other users and avoid harmful, misleading or abusive conduct</li>
+        </ul>
+        <h4>Prohibited conduct</h4>
+        <ul>
+          <li>Posting false, deceptive or fraudulent opportunities</li>
+          <li>Impersonating individuals or organisations</li>
+          <li>Attempting unauthorised access or platform disruption</li>
+          <li>Using the platform for unlawful, abusive or misleading purposes</li>
+        </ul>
+        <h4>Employer and institution responsibilities</h4>
+        <p>Employers and training institutions are responsible for ensuring that the information they publish is accurate, lawful, professional and relevant. Jobs4Youth may review, approve, reject, suspend or remove content where necessary to protect platform integrity.</p>
+        <h4>No guaranteed outcomes</h4>
+        <p>Jobs4Youth facilitates connections, visibility and workflow support, but it does not guarantee placement, admission, hiring, interviews or commercial outcomes.</p>
+      </div>
+      <div class="card span-4">
+        <h3>Terms quick summary</h3>
+        <p class="label">Use the platform honestly, professionally and only for legitimate opportunities, applications, training and partnership engagement.</p>
+        <div>
+          <span class="pill">Accuracy required</span>
+          <span class="pill">Professional conduct</span>
+          <span class="pill">Moderation applies</span>
+          <span class="pill">No misuse</span>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="secondary" onclick="setView('contact')">Ask a question</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function contact() {
-  return trustPageShell('Contact Jobs4Youth', 'Get support, share feedback or explore partnerships', `
-    <p>Jobs4Youth welcomes feedback, technical support requests and partnership enquiries.</p>
-    <h4>Contact categories</h4>
-    <ul>
-      <li>Technical support</li>
-      <li>Employer support</li>
-      <li>Training institution support</li>
-      <li>Partnership and collaboration inquiries</li>
-      <li>General questions and user feedback</li>
-    </ul>
-    <h4>Contact details</h4>
-    <p><b>Email:</b> info@jobs4youth.org</p>
-    <p><b>Support:</b> support@jobs4youth.org</p>
-    <p><b>Partnerships:</b> partnerships@jobs4youth.org</p>
-    <h4>Response approach</h4>
-    <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
-  `);
+  return `
+    <div class="grid">
+      <div class="card span-5">
+        <div class="kicker">Contact Jobs4Youth</div>
+        <h3 style="margin-top:8px;">Support, feedback and partnership enquiries</h3>
+        <p>Use the channels below to reach the Jobs4Youth team. The contact form will draft an email to the correct address based on your category.</p>
+        <div class="job">
+          <div>
+            <h3>General enquiries</h3>
+            <p class="label">For feedback, basic questions and general platform communication.</p>
+            <p><b>info@jobs4youth.org</b></p>
+            <button class="secondary" onclick="copyContactEmail('info@jobs4youth.org')">Copy email</button>
+          </div>
+          <div class="fit" style="--score:100"><span>@</span></div>
+        </div>
+        <div class="job">
+          <div>
+            <h3>Technical support</h3>
+            <p class="label">For account access, platform issues and technical assistance.</p>
+            <p><b>support@jobs4youth.org</b></p>
+            <button class="secondary" onclick="copyContactEmail('support@jobs4youth.org')">Copy email</button>
+          </div>
+          <div class="fit" style="--score:88"><span>IT</span></div>
+        </div>
+        <div class="job">
+          <div>
+            <h3>Partnerships</h3>
+            <p class="label">For collaboration, institutional engagement and strategic partnerships.</p>
+            <p><b>partnerships@jobs4youth.org</b></p>
+            <button class="secondary" onclick="copyContactEmail('partnerships@jobs4youth.org')">Copy email</button>
+          </div>
+          <div class="fit" style="--score:96"><span>+</span></div>
+        </div>
+      </div>
+      <div class="card span-7">
+        <h3>Contact form</h3>
+        <p class="label">Complete the form below. When you click send, Jobs4Youth will open an email draft addressed to the correct contact channel.</p>
+        <div class="form" style="margin-top:14px;">
+          <label>Name<input id="contactName" placeholder="Your full name" /></label>
+          <label>Email<input id="contactEmail" type="email" placeholder="your.email@example.org" /></label>
+          <label>Organisation (optional)<input id="contactOrganisation" placeholder="Your organisation" /></label>
+          <label>Country<input id="contactCountry" placeholder="Your country" /></label>
+          <label>Category
+            <select id="contactCategory">
+              <option>General enquiry</option>
+              <option>Technical support</option>
+              <option>Employer support</option>
+              <option>Training institution support</option>
+              <option>Partnership and collaboration</option>
+              <option>Feedback</option>
+            </select>
+          </label>
+          <label>Subject<input id="contactSubject" placeholder="What is this about?" /></label>
+          <label class="full">Message<textarea id="contactMessageText" placeholder="Describe your request, support issue, feedback or partnership interest."></textarea></label>
+          <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="primary" onclick="sendContactMessage()">Send message</button>
+            <button class="secondary" onclick="copyContactEmail('info@jobs4youth.org')">Copy general email</button>
+            <button class="secondary" onclick="copyContactEmail('support@jobs4youth.org')">Copy support email</button>
+          </div>
+          <div class="label full" id="contactFormStatus"></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function bar(label, n) {
   return `<p><b>${escapeHtml(label)}</b></p><div class="chartbar"><div style="width:${n}%"></div></div><p class="label">${n}% relative demand signal</p>`;
 }
 
+
+function updateFooter() {
+  const footerEl = document.querySelector('.footer-note');
+  if (!footerEl) return;
+  footerEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div><b>Jobs4Youth Hub</b> • trusted youth jobs, training and partnership platform</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        <button class="secondary" onclick="setView('about')">About</button>
+        <button class="secondary" onclick="setView('privacy')">Privacy</button>
+        <button class="secondary" onclick="setView('terms')">Terms</button>
+        <button class="secondary" onclick="setView('contact')">Contact</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <span class="pill">info@jobs4youth.org</span>
+      <span class="pill">support@jobs4youth.org</span>
+      <span class="pill">partnerships@jobs4youth.org</span>
+    </div>
+  `;
+}
+
 function render() {
   renderShell();
   let c = '';
-  const publicPages = { about, privacy, terms, contact };
-  if (publicPages[state.view]) c = publicPages[state.view]();
+
+  if (state.view === 'about') c = about();
+  else if (state.view === 'privacy') c = privacy();
+  else if (state.view === 'terms') c = terms();
+  else if (state.view === 'contact') c = contact();
   else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : contact();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : about();
   else c = about();
+
   document.getElementById('content').innerHTML = c;
+  updateFooter();
 }
 
 function openAuthModal(mode = 'login') {
@@ -1155,6 +1269,66 @@ window.saveOrganizationProfile = async function () {
   await loadEmployersFromSupabase();
   alert('✅ Organisation profile saved successfully!');
   render();
+};
+
+
+window.getContactRoute = function(category) {
+  const routes = {
+    'Technical support': 'support@jobs4youth.org',
+    'Employer support': 'support@jobs4youth.org',
+    'Training institution support': 'support@jobs4youth.org',
+    'Partnership and collaboration': 'partnerships@jobs4youth.org',
+    'General enquiry': 'info@jobs4youth.org',
+    'Feedback': 'info@jobs4youth.org'
+  };
+  return routes[category] || 'info@jobs4youth.org';
+};
+
+window.copyContactEmail = async function(email) {
+  try {
+    await navigator.clipboard.writeText(email);
+    alert(`Copied: ${email}`);
+  } catch (_err) {
+    alert(`Copy failed. Please use this address manually: ${email}`);
+  }
+};
+
+window.sendContactMessage = async function() {
+  const statusEl = document.getElementById('contactFormStatus');
+  const name = document.getElementById('contactName')?.value.trim() || '';
+  const email = document.getElementById('contactEmail')?.value.trim() || '';
+  const category = document.getElementById('contactCategory')?.value || 'General enquiry';
+  const organisation = document.getElementById('contactOrganisation')?.value.trim() || '';
+  const country = document.getElementById('contactCountry')?.value || '';
+  const subject = document.getElementById('contactSubject')?.value.trim() || '';
+  const message = document.getElementById('contactMessageText')?.value.trim() || '';
+
+  if (statusEl) statusEl.textContent = '';
+
+  if (!name || !email || !subject || !message) {
+    if (statusEl) statusEl.textContent = 'Please complete name, email, subject and message before sending.';
+    return;
+  }
+
+  const recipient = window.getContactRoute(category);
+  const mailSubject = `[Jobs4Youth] ${subject}`;
+  const body = [
+    `Name: ${name}`,
+    `Email: ${email}`,
+    `Category: ${category}`,
+    `Organisation: ${organisation || 'Not provided'}`,
+    `Country: ${country || 'Not provided'}`,
+    '',
+    'Message:',
+    message,
+    '',
+    'Sent from the Jobs4Youth contact page.'
+  ].join('
+');
+
+  const mailto = `mailto:${recipient}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
+  if (statusEl) statusEl.textContent = `Your email draft has been prepared for ${recipient}. Please click send in your email app.`;
 };
 
 async function initializeApp() {
