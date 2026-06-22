@@ -44,6 +44,8 @@ let supabase = null;
 let isConfigured = false;
 let currentUser = null;
 let authMode = 'login';
+window.J4Y_BUILD = 'render-fix-2026-06-22-v1';
+console.log('Jobs4Youth build:', window.J4Y_BUILD);
 
 if (
   window.JOBS4YOUTH_CONFIG &&
@@ -800,10 +802,6 @@ window.openVerificationQueue = async function() {
   render();
 };
 
-function getVerificationMessageEl() {
-  return document.getElementById('verificationMessage');
-}
-
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
   const reviewed = state.verificationItems.filter(i => i.reviewStatus !== 'Pending');
@@ -815,7 +813,7 @@ window.refreshAdminQueue = async function() { await loadVerificationQueueFromSup
 window.reviewVerification = async function(queueId, decision) {
   if (!isConfigured || !currentUser) return;
   const item = state.verificationItems.find(v => v.id === queueId);
-  const msg = getVerificationMessageEl();
+  const msg = document.getElementById('verificationMessage');
   if (msg) msg.textContent = '';
   if (!item) { if (msg) msg.textContent = 'Verification item not found.'; return; }
   const approved = decision === 'Approved';
@@ -1008,18 +1006,63 @@ function render() {
   renderShell();
   let c = '';
 
-  if (state.view === 'about') c = about();
-  else if (state.view === 'privacy') c = privacy();
-  else if (state.view === 'terms') c = terms();
-  else if (state.view === 'contact') c = contact();
-  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
-  else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
-  else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : about();
-  else c = about();
+  switch (state.view) {
+    case 'about':
+      c = about();
+      break;
+    case 'privacy':
+      c = privacy();
+      break;
+    case 'terms':
+      c = terms();
+      break;
+    case 'contact':
+      c = contact();
+      break;
+    default:
+      if (state.role === 'youth') {
+        c = state.view === 'dashboard'
+          ? youthDash()
+          : state.view === 'opportunities'
+          ? opportunities()
+          : state.view === 'training'
+          ? training()
+          : profile();
+      } else if (state.role === 'employer') {
+        c = state.view === 'dashboard'
+          ? employerDash()
+          : state.view === 'post opportunity'
+          ? postOpportunity()
+          : state.view === 'candidates'
+          ? candidates()
+          : profile();
+      } else if (state.role === 'institution') {
+        c = state.view === 'dashboard'
+          ? institutionDash()
+          : state.view === 'post training'
+          ? postTraining()
+          : state.view === 'courses'
+          ? courses()
+          : profile();
+      } else if (state.role === 'admin') {
+        c = state.view === 'dashboard'
+          ? adminDash()
+          : state.view === 'verification'
+          ? verification()
+          : state.view === 'audit logs'
+          ? auditLogs()
+          : state.view === 'insights'
+          ? insights()
+          : about();
+      } else {
+        c = about();
+      }
+      break;
+  }
 
   document.getElementById('content').innerHTML = c;
 }
+
 
 function openAuthModal(mode = 'login') {
   authMode = mode;
