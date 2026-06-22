@@ -1703,7 +1703,7 @@ function contact() {
     <h4>Suggested contact details</h4>
     <p><b>Email:</b> info@jobs4youth.org</p>
     <p><b>Support:</b> support@jobs4youth.org</p>
-    <p class="label">You can replace these placeholder contact addresses with your organisation’s official support email addresses before public launch.</p>
+    <p class="label">For support, partnerships and platform enquiries, contact the Jobs4Youth team using the details above.</p>
     <h4>Response approach</h4>
     <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
   `);
