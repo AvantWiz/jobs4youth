@@ -891,6 +891,299 @@ function about() {
     <div class="grid">
       <div class="card span-8">
         <div class="kicker">About Jobs4Youth</div>
+        <h3 style="margin-top:8px;">A professional jobs, internships and skills platform for young people</h3>
+        <p>Jobs4Youth is designed to connect young people to verified employment, internship, apprenticeship and training opportunities in a structured, trusted and accessible digital environment. The platform brings together youth, employers, training institutions and administrators in one coordinated ecosystem.</p>
+        <p>Our goal is simple: reduce the gap between youth talent and real opportunities by making labour market information easier to access, easier to trust and easier to act on.</p>
+        <div class="notice"><b>Why this matters:</b> many young people struggle to find credible vacancies, while employers and training providers struggle to reach the right candidates. Jobs4Youth exists to make that connection faster, safer and more transparent.</div>
+      </div>
+      <div class="card span-4">
+        <h3>Who the platform serves</h3>
+        <p><b>Youth job seekers</b><br><span class="label">Find opportunities matched to skills, education and location.</span></p>
+        <p><b>Employers</b><br><span class="label">Publish vacancies and review candidate applications in one place.</span></p>
+        <p><b>Training institutions</b><br><span class="label">Promote programmes that respond to real market demand.</span></p>
+        <p><b>Administrators</b><br><span class="label">Strengthen trust through verification and moderation.</span></p>
+      </div>
+      <div class="card span-6">
+        <h3>Core value proposition</h3>
+        <ul>
+          <li>Verified opportunity listings and moderation workflows</li>
+          <li>Structured user profiles and cleaner data entry through drop-down fields</li>
+          <li>Role-based dashboards for youth, employers, institutions and admin users</li>
+          <li>Opportunity, training and application management in one place</li>
+          <li>Labour market analytics and youth employment reporting</li>
+        </ul>
+      </div>
+      <div class="card span-6">
+        <h3>Professional standards</h3>
+        <p>Jobs4Youth operates as a professional public service platform with structured forms, verification, responsible moderation, consistent data capture and clear governance.</p>
+      </div>
+    </div>
+  `;
+}
+
+function privacy() {
+  return trustPageShell('Privacy Policy', 'How Jobs4Youth handles personal information', `
+    <p><b>Last updated:</b> June 2026</p>
+    <p>Jobs4Youth is committed to protecting the privacy and security of all users. This Privacy Policy explains what information may be collected, how that information is used, and the steps taken to protect it.</p>
+    <h4>Information we may collect</h4>
+    <ul>
+      <li>Name, email address and account role</li>
+      <li>Country, region and profile information</li>
+      <li>Education, skills, interests and employment preferences</li>
+      <li>Organisation information for employers and training institutions</li>
+      <li>Application and posting activity on the platform</li>
+    </ul>
+    <h4>How information is used</h4>
+    <ul>
+      <li>To create and manage user accounts</li>
+      <li>To match youth with opportunities and training offers</li>
+      <li>To support recruitment and course applications</li>
+      <li>To improve the platform and generate aggregated insights</li>
+      <li>To maintain quality, moderation and verification workflows</li>
+    </ul>
+    <h4>Information sharing</h4>
+    <p>Jobs4Youth does not sell personal information. Information may be shared between applicants and employers, or between applicants and institutions, only where required to support legitimate platform functions. Information may also be disclosed when required by law.</p>
+    <h4>Data protection</h4>
+    <p>Reasonable technical and organisational measures are used to protect information from unauthorised access, disclosure, loss or misuse. Users are encouraged to keep passwords secure and report any suspicious activity promptly.</p>
+    <h4>User choices and rights</h4>
+    <p>Users may request review, correction or deletion of their information, subject to applicable legal and operational requirements.</p>
+  `);
+}
+
+function terms() {
+  return trustPageShell('Terms of Use', 'Rules for using Jobs4Youth responsibly', `
+    <p>By accessing or using Jobs4Youth, users agree to use the platform lawfully, responsibly and in accordance with these Terms of Use.</p>
+    <h4>User responsibilities</h4>
+    <ul>
+      <li>Provide accurate and up-to-date account information</li>
+      <li>Maintain the confidentiality of login credentials</li>
+      <li>Use the platform only for legitimate employment and training purposes</li>
+      <li>Respect other users and avoid misleading or harmful behaviour</li>
+    </ul>
+    <h4>Prohibited conduct</h4>
+    <ul>
+      <li>Posting false, deceptive or fraudulent opportunities</li>
+      <li>Impersonating individuals or organisations</li>
+      <li>Uploading harmful content or attempting unauthorised access</li>
+      <li>Using the platform for unlawful, abusive or misleading purposes</li>
+    </ul>
+    <h4>Employer and institution obligations</h4>
+    <p>Employers and training institutions are responsible for ensuring that the opportunities, courses and organisation details they publish are accurate, lawful and professional. Jobs4Youth reserves the right to review, verify, approve, reject or remove content as needed.</p>
+    <h4>No guaranteed outcomes</h4>
+    <p>Jobs4Youth facilitates connections between users but does not guarantee job placement, training admission, interview selection or hiring outcomes.</p>
+    <h4>Updates to these terms</h4>
+    <p>These Terms may be updated periodically. Continued use of the platform after updates indicates acceptance of the revised terms.</p>
+  `);
+}
+
+function contact() {
+  return trustPageShell('Contact Jobs4Youth', 'Get support, share feedback or explore partnerships', `
+    <p>Jobs4Youth welcomes feedback, technical support requests and partnership enquiries.</p>
+    <h4>Contact categories</h4>
+    <ul>
+      <li>Technical support</li>
+      <li>Employer support</li>
+      <li>Training institution support</li>
+      <li>Partnership and collaboration inquiries</li>
+      <li>General questions and user feedback</li>
+    </ul>
+    <h4>Contact details</h4>
+    <p><b>Email:</b> info@jobs4youth.org</p>
+    <p><b>Support:</b> support@jobs4youth.org</p>
+    <p><b>Partnerships:</b> partnerships@jobs4youth.org</p>
+    <h4>Response approach</h4>
+    <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
+  `);
+}
+
+function bar(label, n) {
+  return `<p><b>${escapeHtml(label)}</b></p><div class="chartbar"><div style="width:${n}%"></div></div><p class="label">${n}% relative demand signal</p>`;
+}
+
+function render() {
+  renderShell();
+  let c = '';
+  const publicPages = { about, privacy, terms, contact };
+  if (publicPages[state.view]) c = publicPages[state.view]();
+  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
+  else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
+  else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : contact();
+  else c = about();
+  document.getElementById('content').innerHTML = c;
+}
+
+function openAuthModal(mode = 'login') {
+  authMode = mode;
+  document.getElementById('authModal')?.classList.remove('hidden');
+  updateAuthModal();
+}
+
+function closeAuthModal() {
+  document.getElementById('authModal')?.classList.add('hidden');
+  document.getElementById('authMessage').textContent = '';
+  document.getElementById('authPassword').value = '';
+}
+
+function updateAuthModal() {
+  const isSignup = authMode === 'signup';
+  document.getElementById('authTitle').textContent = isSignup ? 'Create your Jobs4Youth account' : 'Sign in to Jobs4Youth';
+  document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
+  document.getElementById('fullNameWrap').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('roleWrap').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', !isSignup);
+  document.getElementById('tabSignup').classList.toggle('active', isSignup);
+  document.getElementById('authMessage').textContent = '';
+}
+
+function showSignIn() { openAuthModal('login'); }
+
+async function handleAuthSubmit() {
+  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value.trim();
+  const fullName = document.getElementById('authFullName').value.trim();
+  const role = document.getElementById('authRole').value;
+  const msg = document.getElementById('authMessage');
+  msg.textContent = '';
+  if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
+
+  let authResult;
+  try {
+    authResult = authMode === 'signup'
+      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role } } })
+      : await supabase.auth.signInWithPassword({ email, password });
+  } catch (networkError) {
+    console.error('Signup/signin network error:', networkError);
+    msg.textContent = networkError?.message || networkError?.name || 'Network error while contacting Supabase.';
+    return;
+  }
+  if (authResult.error) {
+    console.error('Auth error full object:', authResult.error);
+    msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
+    return;
+  }
+
+  currentUser = authResult.data.user || authResult.data.session?.user || null;
+  if (authMode === 'signup' && !authResult.data.session) {
+    msg.textContent = 'Account created. Please check your email to confirm your account, then sign in.';
+    return;
+  }
+  if (currentUser) {
+    let profile = await ensureProfile(currentUser);
+    if (profile && authMode === 'signup') {
+      const safeRole = ['youth','employer','institution','admin'].includes((role || '').toLowerCase()) ? role.toLowerCase() : 'youth';
+      const { data: updatedProfile, error: roleUpdateError } = await supabase.from('profiles').update({ full_name: fullName, role: safeRole }).eq('id', currentUser.id).select().single();
+      if (!roleUpdateError && updatedProfile) profile = updatedProfile;
+      await ensureVerificationRequest(profile, safeRole);
+    }
+    syncProfileToState(profile);
+  }
+  await loadJobsFromSupabase();
+  await loadCoursesFromSupabase();
+  await loadEmployersFromSupabase();
+  await loadApplicationsFromSupabase();
+  await loadVerificationQueueFromSupabase();
+  await loadAuditLogsFromSupabase();
+  closeAuthModal();
+  state.view = 'dashboard';
+  render();
+}
+
+async function handlePasswordReset() {
+  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
+  const email = document.getElementById('authEmail').value.trim();
+  const msg = document.getElementById('authMessage');
+  msg.textContent = '';
+  if (!email) { msg.textContent = 'Enter your email first, then click reset password.'; return; }
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  if (error) { msg.textContent = error.message; return; }
+  msg.textContent = 'Password reset email sent. Check your inbox.';
+}
+
+async function signOut() {
+  if (isConfigured && supabase) await supabase.auth.signOut();
+  currentUser = null;
+  state = structuredClone(initialState);
+  state.view = 'about';
+  render();
+  alert('Signed out.');
+}
+
+window.saveProfile = async function () {
+  if (!isConfigured) return alert('Supabase not connected');
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) return alert('Please sign in first.');
+  const updates = {
+    full_name: document.getElementById('profileName')?.value || '',
+    country: document.getElementById('profileCountry')?.value || '',
+    region: document.getElementById('profileRegion')?.value || '',
+    education: document.getElementById('profileEducation')?.value || '',
+    availability: document.getElementById('profileAvailability')?.value || '',
+    experience_level: document.getElementById('profileExperience')?.value || '',
+    skills: document.getElementById('profileSkills')?.value || '',
+    interests: document.getElementById('profileInterests')?.value || '',
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+  if (error) return alert(`❌ Failed to save profile: ${error.message}`);
+  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
+  await writeAuditLog('profile_saved', 'profile', user.id, 'Youth profile updated');
+  alert('✅ Profile saved successfully!');
+  render();
+};
+
+window.saveOrganizationProfile = async function () {
+  if (!isConfigured) return alert('Supabase not connected');
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) return alert('Please sign in first.');
+  const updates = {
+    full_name: document.getElementById('orgProfileName')?.value || '',
+    organization_name: document.getElementById('orgName')?.value || '',
+    sector: document.getElementById('orgSector')?.value || '',
+    country: document.getElementById('orgCountry')?.value || '',
+    region: document.getElementById('orgRegion')?.value || '',
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+  if (error) return alert(`❌ Failed to save organisation profile: ${error.message}`);
+  state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
+  await ensureVerificationRequest({ id: user.id }, state.role);
+  await writeAuditLog('organisation_profile_saved', 'profile', user.id, 'Organisation profile updated');
+  await loadEmployersFromSupabase();
+  alert('✅ Organisation profile saved successfully!');
+  render();
+};
+
+
+function updateFooter() {
+  const footerEl = document.querySelector('.footer-note');
+  if (!footerEl) return;
+  footerEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div><b>Jobs4Youth Hub</b> • trusted youth jobs, training and partnership platform</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        <button class="secondary" onclick="setView('about')">About</button>
+        <button class="secondary" onclick="setView('privacy')">Privacy</button>
+        <button class="secondary" onclick="setView('terms')">Terms</button>
+        <button class="secondary" onclick="setView('contact')">Contact</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <span class="pill">info@jobs4youth.org</span>
+      <span class="pill">support@jobs4youth.org</span>
+      <span class="pill">partnerships@jobs4youth.org</span>
+    </div>
+  `;
+}
+
+function about() {
+  return `
+    <div class="grid">
+      <div class="card span-8">
+        <div class="kicker">About Jobs4Youth</div>
         <h3 style="margin-top:8px;">A trusted platform connecting youth talent to real opportunities</h3>
         <p>Jobs4Youth is a professional employment and skills platform designed to connect young people with verified jobs, internships, apprenticeships and training opportunities in one coordinated digital space.</p>
         <p>The platform brings together youth, employers, training institutions and administrators through structured workflows that support opportunity discovery, application management, verification and responsible moderation.</p>
@@ -1083,195 +1376,6 @@ function contact() {
   `;
 }
 
-function bar(label, n) {
-  return `<p><b>${escapeHtml(label)}</b></p><div class="chartbar"><div style="width:${n}%"></div></div><p class="label">${n}% relative demand signal</p>`;
-}
-
-
-function updateFooter() {
-  const footerEl = document.querySelector('.footer-note');
-  if (!footerEl) return;
-  footerEl.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div><b>Jobs4Youth Hub</b> • trusted youth jobs, training and partnership platform</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-        <button class="secondary" onclick="setView('about')">About</button>
-        <button class="secondary" onclick="setView('privacy')">Privacy</button>
-        <button class="secondary" onclick="setView('terms')">Terms</button>
-        <button class="secondary" onclick="setView('contact')">Contact</button>
-      </div>
-    </div>
-    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
-      <span class="pill">info@jobs4youth.org</span>
-      <span class="pill">support@jobs4youth.org</span>
-      <span class="pill">partnerships@jobs4youth.org</span>
-    </div>
-  `;
-}
-
-function render() {
-  renderShell();
-  let c = '';
-
-  if (state.view === 'about') c = about();
-  else if (state.view === 'privacy') c = privacy();
-  else if (state.view === 'terms') c = terms();
-  else if (state.view === 'contact') c = contact();
-  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
-  else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
-  else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : about();
-  else c = about();
-
-  document.getElementById('content').innerHTML = c;
-  updateFooter();
-}
-
-function openAuthModal(mode = 'login') {
-  authMode = mode;
-  document.getElementById('authModal')?.classList.remove('hidden');
-  updateAuthModal();
-}
-
-function closeAuthModal() {
-  document.getElementById('authModal')?.classList.add('hidden');
-  document.getElementById('authMessage').textContent = '';
-  document.getElementById('authPassword').value = '';
-}
-
-function updateAuthModal() {
-  const isSignup = authMode === 'signup';
-  document.getElementById('authTitle').textContent = isSignup ? 'Create your Jobs4Youth account' : 'Sign in to Jobs4Youth';
-  document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
-  document.getElementById('fullNameWrap').style.display = isSignup ? 'block' : 'none';
-  document.getElementById('roleWrap').style.display = isSignup ? 'block' : 'none';
-  document.getElementById('tabLogin').classList.toggle('active', !isSignup);
-  document.getElementById('tabSignup').classList.toggle('active', isSignup);
-  document.getElementById('authMessage').textContent = '';
-}
-
-function showSignIn() { openAuthModal('login'); }
-
-async function handleAuthSubmit() {
-  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
-  const email = document.getElementById('authEmail').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
-  const fullName = document.getElementById('authFullName').value.trim();
-  const role = document.getElementById('authRole').value;
-  const msg = document.getElementById('authMessage');
-  msg.textContent = '';
-  if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
-
-  let authResult;
-  try {
-    authResult = authMode === 'signup'
-      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role } } })
-      : await supabase.auth.signInWithPassword({ email, password });
-  } catch (networkError) {
-    console.error('Signup/signin network error:', networkError);
-    msg.textContent = networkError?.message || networkError?.name || 'Network error while contacting Supabase.';
-    return;
-  }
-  if (authResult.error) {
-    console.error('Auth error full object:', authResult.error);
-    msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
-    return;
-  }
-
-  currentUser = authResult.data.user || authResult.data.session?.user || null;
-  if (authMode === 'signup' && !authResult.data.session) {
-    msg.textContent = 'Account created. Please check your email to confirm your account, then sign in.';
-    return;
-  }
-  if (currentUser) {
-    let profile = await ensureProfile(currentUser);
-    if (profile && authMode === 'signup') {
-      const safeRole = ['youth','employer','institution','admin'].includes((role || '').toLowerCase()) ? role.toLowerCase() : 'youth';
-      const { data: updatedProfile, error: roleUpdateError } = await supabase.from('profiles').update({ full_name: fullName, role: safeRole }).eq('id', currentUser.id).select().single();
-      if (!roleUpdateError && updatedProfile) profile = updatedProfile;
-      await ensureVerificationRequest(profile, safeRole);
-    }
-    syncProfileToState(profile);
-  }
-  await loadJobsFromSupabase();
-  await loadCoursesFromSupabase();
-  await loadEmployersFromSupabase();
-  await loadApplicationsFromSupabase();
-  await loadVerificationQueueFromSupabase();
-  await loadAuditLogsFromSupabase();
-  closeAuthModal();
-  state.view = 'dashboard';
-  render();
-}
-
-async function handlePasswordReset() {
-  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
-  const email = document.getElementById('authEmail').value.trim();
-  const msg = document.getElementById('authMessage');
-  msg.textContent = '';
-  if (!email) { msg.textContent = 'Enter your email first, then click reset password.'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-  if (error) { msg.textContent = error.message; return; }
-  msg.textContent = 'Password reset email sent. Check your inbox.';
-}
-
-async function signOut() {
-  if (isConfigured && supabase) await supabase.auth.signOut();
-  currentUser = null;
-  state = structuredClone(initialState);
-  state.view = 'about';
-  render();
-  alert('Signed out.');
-}
-
-window.saveProfile = async function () {
-  if (!isConfigured) return alert('Supabase not connected');
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (userError || !user) return alert('Please sign in first.');
-  const updates = {
-    full_name: document.getElementById('profileName')?.value || '',
-    country: document.getElementById('profileCountry')?.value || '',
-    region: document.getElementById('profileRegion')?.value || '',
-    education: document.getElementById('profileEducation')?.value || '',
-    availability: document.getElementById('profileAvailability')?.value || '',
-    experience_level: document.getElementById('profileExperience')?.value || '',
-    skills: document.getElementById('profileSkills')?.value || '',
-    interests: document.getElementById('profileInterests')?.value || '',
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-  if (error) return alert(`❌ Failed to save profile: ${error.message}`);
-  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
-  await writeAuditLog('profile_saved', 'profile', user.id, 'Youth profile updated');
-  alert('✅ Profile saved successfully!');
-  render();
-};
-
-window.saveOrganizationProfile = async function () {
-  if (!isConfigured) return alert('Supabase not connected');
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (userError || !user) return alert('Please sign in first.');
-  const updates = {
-    full_name: document.getElementById('orgProfileName')?.value || '',
-    organization_name: document.getElementById('orgName')?.value || '',
-    sector: document.getElementById('orgSector')?.value || '',
-    country: document.getElementById('orgCountry')?.value || '',
-    region: document.getElementById('orgRegion')?.value || '',
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-  if (error) return alert(`❌ Failed to save organisation profile: ${error.message}`);
-  state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
-  await ensureVerificationRequest({ id: user.id }, state.role);
-  await writeAuditLog('organisation_profile_saved', 'profile', user.id, 'Organisation profile updated');
-  await loadEmployersFromSupabase();
-  alert('✅ Organisation profile saved successfully!');
-  render();
-};
-
-
 window.getContactRoute = function(category) {
   const routes = {
     'Technical support': 'support@jobs4youth.org',
@@ -1323,13 +1427,32 @@ window.sendContactMessage = async function() {
     message,
     '',
     'Sent from the Jobs4Youth contact page.'
-  ].join('
-');
+  ].join('\n');
 
   const mailto = `mailto:${recipient}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(body)}`;
   window.location.href = mailto;
-  if (statusEl) statusEl.textContent = `Your email draft has been prepared for ${recipient}. Please click send in your email app.`;
+  if (statusEl) {
+    statusEl.textContent = `Your email draft has been prepared for ${recipient}. Please click send in your email app.`;
+  }
 };
+
+function render() {
+  renderShell();
+  let c = '';
+
+  if (state.view === 'about') c = about();
+  else if (state.view === 'privacy') c = privacy();
+  else if (state.view === 'terms') c = terms();
+  else if (state.view === 'contact') c = contact();
+  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
+  else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
+  else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : about();
+  else c = about();
+
+  document.getElementById('content').innerHTML = c;
+  updateFooter();
+}
 
 async function initializeApp() {
   state.view = 'about';
