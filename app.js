@@ -155,16 +155,34 @@ function desc() {
   return 'Verify partners, monitor activity and generate labour market intelligence.';
 }
 
-function setView(v) {
+async function loadDataForView(v = state.view) {
+  if (!isConfigured) return;
+  if (['dashboard', 'opportunities', 'training', 'courses', 'insights'].includes(v)) {
+    await loadJobsFromSupabase();
+    await loadCoursesFromSupabase();
+    await loadEmployersFromSupabase();
+  }
+  if (['dashboard', 'candidates', 'opportunities'].includes(v)) {
+    await loadApplicationsFromSupabase();
+  }
+  if (state.role === 'admin' && ['dashboard', 'verification'].includes(v)) {
+    await loadVerificationQueueFromSupabase();
+  }
+  if (state.role === 'admin' && ['dashboard', 'audit logs'].includes(v)) {
+    await loadAuditLogsFromSupabase();
+  }
+}
+
+async function setView(v) {
   state.view = v;
+  await loadDataForView(v);
   render();
 }
 
-function setRole(r) {
+async function setRole(r) {
   if (currentUser) return;
   state.role = r;
-  state.view = r === 'admin' ? 'dashboard' : 'about';
-  render();
+  await setView('dashboard');
 }
 
 window.setView = setView;
@@ -405,15 +423,33 @@ async function writeAuditLog(action, entityType, entityId = null, details = '') 
 }
 
 function renderShell() {
-  document.getElementById('nav').innerHTML = navItems().map(v => `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}</button>`).join('');
+  const navEl = document.getElementById('nav');
+  const roleEl = document.getElementById('roleSwitch');
+  const signInBtn = document.getElementById('btnSignIn');
+  const signOutBtn = document.getElementById('btnSignOut');
+  const authStatus = document.getElementById('authStatus');
+
+  navEl.innerHTML = navItems().map(v => `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}</button>`).join('');
   const roles = currentUser ? [state.role] : ['youth', 'employer', 'institution', 'admin'];
-  document.getElementById('roleSwitch').innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
+  roleEl.innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
+
   document.getElementById('kicker').textContent = 'Platform workspace';
   document.getElementById('pageTitle').textContent = title(state.view);
   document.getElementById('pageDesc').textContent = desc();
-  if (!isConfigured) document.getElementById('authStatus').textContent = 'Configuration required';
-  else if (currentUser) document.getElementById('authStatus').textContent = `Signed in: ${currentUser.email}`;
-  else document.getElementById('authStatus').textContent = 'Ready for sign in';
+
+  if (currentUser) {
+    signInBtn.style.display = 'none';
+    signInBtn.disabled = true;
+    signOutBtn.style.display = 'inline-flex';
+    signOutBtn.disabled = false;
+    authStatus.textContent = '';
+  } else {
+    signInBtn.style.display = 'inline-flex';
+    signInBtn.disabled = false;
+    signOutBtn.style.display = 'none';
+    signOutBtn.disabled = true;
+    authStatus.textContent = '';
+  }
 }
 
 function metrics() {
@@ -754,9 +790,15 @@ function adminDash() {
       <div class="card span-4"><div class="label">Approved items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Approved').length}</div></div>
       <div class="card span-4"><div class="label">Rejected items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Rejected').length}</div></div>
     </div>
-    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place.</p></div><div class="card span-5"><h3>Platform governance</h3><p class="label">Verified partners, moderated opportunities, reviewed training providers and accountable admin decisions.</p></div></div>
+    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="openVerificationQueue()">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place.</p></div><div class="card span-5"><h3>Platform governance</h3><p class="label">Verified partners, moderated opportunities, reviewed training providers and accountable admin decisions.</p></div></div>
   `;
 }
+
+window.openVerificationQueue = async function() {
+  state.view = 'verification';
+  await loadVerificationQueueFromSupabase();
+  render();
+};
 
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
@@ -961,14 +1003,13 @@ function bar(label, n) {
 function render() {
   renderShell();
   let c = '';
-  if (state.view === 'about') c = about();
-  else if (state.view === 'privacy') c = privacy();
-  else if (state.view === 'terms') c = terms();
-  else if (state.view === 'contact') c = contact();
+  const publicPages = { about, privacy, terms, contact };
+  if (publicPages[state.view]) c = publicPages[state.view]();
   else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : contact();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'audit logs' ? auditLogs() : state.view === 'insights' ? insights() : contact();
+  else c = about();
   document.getElementById('content').innerHTML = c;
 }
 
