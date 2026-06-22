@@ -11,7 +11,8 @@ const OPTION_SETS = {
   sectors: ['Agriculture','Agri-processing','Livestock','Fisheries','Food Manufacturing','Logistics','ICT','Finance','Education','Other'],
   opportunityTypes: ['Job','Internship','Apprenticeship','Training','Extension'],
   deliveryModes: ['Online','Hybrid','In-person'],
-  courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp']
+  courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp'],
+  verificationDocumentTypes: ['Business Registration Certificate','Tax Compliance Certificate','Accreditation or Licence','Organisation Profile','Authorisation Letter','Other Supporting Document']
 };
 
 const demoState = {
@@ -35,7 +36,9 @@ const demoState = {
   employers: [],
   applications: [],
   employerCandidates: [],
-  verificationItems: []
+  verificationItems: [],
+  verificationDocuments: [],
+  notifications: []
 };
 
 let state = structuredClone(demoState);
@@ -43,6 +46,10 @@ let supabase = null;
 let isConfigured = false;
 let currentUser = null;
 let authMode = 'login';
+let browseFilters = {
+  jobs: { keyword: '', country: '', region: '', type: '', education: '', experience: '' },
+  courses: { keyword: '', country: '', region: '', mode: '' }
+};
 
 if (
   window.JOBS4YOUTH_CONFIG &&
@@ -81,6 +88,302 @@ function renderOptions(options, selected = '', placeholder = 'Select') {
   return first + items;
 }
 
+function matchesText(haystack, needle) {
+  return String(haystack || '').toLowerCase().includes(String(needle || '').toLowerCase());
+}
+function filteredJobs() {
+  const f = browseFilters.jobs;
+  return [...state.jobs]
+    .filter(job => {
+      if (f.keyword) {
+        const blob = [job.title, job.org, job.desc, job.skills, job.region, job.country, job.type].join(' ');
+        if (!matchesText(blob, f.keyword)) return false;
+      }
+      if (f.country && job.country !== f.country) return false;
+      if (f.region && !matchesText(job.region, f.region)) return false;
+      if (f.type && job.type !== f.type) return false;
+      if (f.education && job.education !== f.education) return false;
+      if (f.experience && job.experience !== f.experience) return false;
+      return true;
+    })
+    .sort((a, b) => matchScore(b) - matchScore(a));
+}
+function filteredCourses() {
+  const f = browseFilters.courses;
+  return [...state.courses]
+    .filter(course => {
+      if (f.keyword) {
+        const blob = [course.title, course.provider, course.skills, course.region, course.country, course.mode, course.duration].join(' ');
+        if (!matchesText(blob, f.keyword)) return false;
+      }
+      if (f.country && course.country !== f.country) return false;
+      if (f.region && !matchesText(course.region, f.region)) return false;
+      if (f.mode && course.mode !== f.mode) return false;
+      return true;
+    });
+}
+window.setOpportunityFilter = function(field, value) {
+  browseFilters.jobs[field] = value;
+  render();
+};
+window.clearOpportunityFilters = function() {
+  browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
+  render();
+};
+window.setCourseFilter = function(field, value) {
+  browseFilters.courses[field] = value;
+  render();
+};
+window.clearCourseFilters = function() {
+  browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
+  render();
+};
+
+function sanitizeFileName(name) {
+  return String(name || 'document').replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(size >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+function documentTypeBadge(value) {
+  return `<span class="pill">${escapeHtml(value || 'Supporting document')}</span>`;
+}
+function latestUnreadCount() {
+  return (state.notifications || []).filter(item => !item.isRead).length;
+}
+function latestVerificationNotification() {
+  return [...(state.notifications || [])]
+    .filter(item => String(item.notificationType || '').startsWith('verification_'))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+}
+function notificationCard(item) {
+  return `
+    <div class="notification-card ${item.isRead ? '' : 'notification-card-unread'}">
+      <div class="section-title">
+        <div>
+          <h4>${escapeHtml(item.title || 'Notification')}</h4>
+          <p class="label">${escapeHtml(item.body || '')}</p>
+        </div>
+        <div class="job-badges">
+          ${statusBadge(item.isRead ? 'Read' : 'Unread')}
+          ${item.createdAt ? `<span class="pill">${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>` : ''}
+        </div>
+      </div>
+      <div class="results-meta">
+        <span class="pill">${escapeHtml(title(String(item.notificationType || 'platform update').replace(/_/g, ' ')))}</span>
+        ${item.emailStatus ? `<span class="pill">Email ${escapeHtml(item.emailStatus)}</span>` : ''}
+      </div>
+      <div class="hero-actions" style="margin-top:12px;">
+        ${!item.isRead ? `<button class="secondary" onclick="markNotificationRead('${escapeHtml(item.id)}')">Mark as read</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+function documentReviewCard(doc, adminMode = false) {
+  return `
+    <div class="document-card ${doc.reviewStatus === 'Approved' ? 'document-card-approved' : doc.reviewStatus === 'Rejected' ? 'document-card-rejected' : ''}">
+      <div class="document-card-head">
+        <div>
+          <h4>${escapeHtml(doc.fileName || 'Uploaded document')}</h4>
+          <div class="results-meta">
+            ${documentTypeBadge(doc.documentType)}
+            <span class="pill">${escapeHtml(doc.mimeType || 'Document')}</span>
+            <span class="pill">${escapeHtml(formatBytes(doc.fileSize))}</span>
+            ${doc.createdAt ? `<span class="pill">Uploaded ${escapeHtml(new Date(doc.createdAt).toLocaleDateString())}</span>` : ''}
+          </div>
+        </div>
+        <div class="job-badges">${statusBadge(doc.reviewStatus || 'Pending')}</div>
+      </div>
+      ${doc.adminNotes ? `<div class="support-admin-note"><b>Admin note:</b> ${escapeHtml(doc.adminNotes)}</div>` : ''}
+      <div class="document-actions">
+        <button class="secondary" onclick="openVerificationDocument('${escapeHtml(doc.storagePath)}')">Open document</button>
+        ${adminMode ? `<button class="primary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Approved')">Approve document</button><button class="secondary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Rejected')">Reject document</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+function documentUploadGuidance(role) {
+  if (role === 'institution') return 'Upload accreditation, registration, operating licence, or another institution verification document so admins can review your institution more professionally.';
+  return 'Upload registration, tax, authorisation, or another employer verification document to support admin review and build public trust.';
+}
+async function enqueuePlatformNotification({ userId, actorId, recipientEmail, title, body, notificationType, relatedEntityType = null, relatedEntityId = null }) {
+  if (!isConfigured || !supabase || !userId || !title || !body) return { ok: false };
+  const { error: notificationError } = await supabase.from('notifications').insert([{
+    user_id: userId,
+    actor_id: actorId || currentUser?.id || null,
+    title,
+    body,
+    notification_type: notificationType || 'platform_update',
+    related_entity_type: relatedEntityType,
+    related_entity_id: relatedEntityId,
+    is_read: false
+  }]);
+  if (notificationError) console.error('Notification insert error:', notificationError);
+  if (recipientEmail) {
+    const { error: emailError } = await supabase.from('email_queue').insert([{
+      actor_id: actorId || currentUser?.id || null,
+      user_id: userId,
+      recipient_email: recipientEmail,
+      subject: title,
+      body,
+      email_type: notificationType || 'platform_update',
+      related_entity_type: relatedEntityType,
+      related_entity_id: relatedEntityId,
+      queue_status: 'Queued'
+    }]);
+    if (emailError) console.error('Email queue insert error:', emailError);
+  }
+  return { ok: true };
+}
+function filtersPanel(titleText, bodyText, innerHtml, clearFnName) {
+  return `
+    <div class="filters-panel">
+      <div class="section-title">
+        <div>
+          <h3>${escapeHtml(titleText)}</h3>
+          <p class="label">${escapeHtml(bodyText)}</p>
+        </div>
+        <button class="secondary" onclick="${escapeHtml(clearFnName)}()">Clear filters</button>
+      </div>
+      <div class="filters-grid">${innerHtml}</div>
+    </div>
+  `;
+}
+function completenessFromFields(values) {
+  const total = values.length || 1;
+  const filled = values.filter(v => String(v || '').trim()).length;
+  return Math.round((filled / total) * 100);
+}
+function youthProfileCompletion() {
+  return completenessFromFields([
+    state.profile.name,
+    state.profile.country,
+    state.profile.region,
+    state.profile.education,
+    state.profile.availability,
+    state.profile.experience,
+    state.profile.skills,
+    state.profile.interests
+  ]);
+}
+function organisationProfileCompletion() {
+  return completenessFromFields([
+    state.profile.name,
+    state.profile.organizationName,
+    state.profile.sector,
+    state.profile.country,
+    state.profile.region
+  ]);
+}
+function onboardingMessage() {
+  if (!currentUser) {
+    return {
+      title: 'Create an account to unlock the full platform',
+      text: 'Browse public listings freely, then create an account to apply, publish opportunities or manage training offers.',
+      action: `<button class="secondary" onclick="openSignup()">Create account</button>`
+    };
+  }
+  if (state.role === 'youth') {
+    const completion = youthProfileCompletion();
+    if (completion < 75) return {
+      title: 'Complete your youth profile to improve matching',
+      text: `Your current profile is ${completion}% complete. Add skills, interests, education and location details to improve relevance and trust.`,
+      action: `<button class="secondary" onclick="setView('profile')">Complete profile</button>`
+    };
+    if (!state.applications.length) return {
+      title: 'You are ready to apply',
+      text: 'Your profile now supports stronger match results. Explore verified opportunities and begin submitting applications.',
+      action: `<button class="secondary" onclick="setView('opportunities')">Browse opportunities</button>`
+    };
+    return {
+      title: 'Stay active in the marketplace',
+      text: 'Keep your profile updated and continue exploring training pathways that strengthen your employability.',
+      action: `<button class="secondary" onclick="setView('training')">Browse training</button>`
+    };
+  }
+  if (state.role === 'employer') {
+    const completion = organisationProfileCompletion();
+    if (!state.profile.organizationName || completion < 80) return {
+      title: 'Complete your organisation profile first',
+      text: `Your employer profile is ${completion}% complete. Add organisation details before posting to present a stronger public-facing profile.`,
+      action: `<button class="secondary" onclick="setView('profile')">Complete profile</button>`
+    };
+    if (!state.profile.verified) return {
+      title: 'Verification improves public trust',
+      text: 'Your organisation can still save content, but verified organisations present stronger public trust signals to jobseekers.',
+      action: `<button class="secondary" onclick="setView('profile')">Review organisation profile</button>`
+    };
+    return {
+      title: 'Your employer profile is public-ready',
+      text: 'Continue posting moderated opportunities and reviewing fit-for-role candidates through the platform.',
+      action: `<button class="secondary" onclick="setView('post opportunity')">Post opportunity</button>`
+    };
+  }
+  if (state.role === 'institution') {
+    const completion = organisationProfileCompletion();
+    if (!state.profile.organizationName || completion < 80) return {
+      title: 'Strengthen your institution profile',
+      text: `Your institution profile is ${completion}% complete. Add provider details to present training offers more professionally.`,
+      action: `<button class="secondary" onclick="setView('profile')">Complete profile</button>`
+    };
+    if (!state.profile.verified) return {
+      title: 'Verification helps learners trust your courses',
+      text: 'Verified provider status strengthens confidence in public training listings and supports a more professional learning catalogue.',
+      action: `<button class="secondary" onclick="setView('profile')">Review institution profile</button>`
+    };
+    return {
+      title: 'Your training catalogue is ready to grow',
+      text: 'Publish additional courses and continue aligning content with demand signals shown on the platform.',
+      action: `<button class="secondary" onclick="setView('post training')">Post training</button>`
+    };
+  }
+  return {
+    title: 'Moderate and grow public trust',
+    text: 'Use admin workflows to keep opportunities, organisations and training offers credible and visible to the public.',
+    action: `<button class="secondary" onclick="setView('verification')">Open verification queue</button>`
+  };
+}
+function onboardingPanel() {
+  const info = onboardingMessage();
+  return `
+    <div class="onboarding-panel">
+      <div>
+        <div class="kicker">Next best action</div>
+        <h3>${escapeHtml(info.title)}</h3>
+        <p class="label">${escapeHtml(info.text)}</p>
+      </div>
+      <div class="hero-actions">${info.action}</div>
+    </div>
+  `;
+}
+function completionCard(titleText, percent, bodyText, buttonLabel) {
+  return `
+    <div class="completion-card">
+      <div class="section-title">
+        <div>
+          <h3>${escapeHtml(titleText)}</h3>
+          <p class="label">${escapeHtml(bodyText)}</p>
+        </div>
+        <span class="status-badge ${percent >= 80 ? 'status-verified' : percent >= 50 ? 'status-pending' : 'status-rejected'}">${percent}% complete</span>
+      </div>
+      <div class="chartbar"><div style="width:${percent}%"></div></div>
+      <div class="hero-actions" style="margin-top:12px;">
+        <button class="secondary" onclick="setView('profile')">${escapeHtml(buttonLabel)}</button>
+      </div>
+    </div>
+  `;
+}
+
+
 function matchScore(job) {
   const ps = new Set(words([
     state.profile.skills,
@@ -105,23 +408,30 @@ function matchScore(job) {
   return Math.min(98, base);
 }
 
+
 function navItems() {
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'insights', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
+
+
 function desc() {
+  if (state.view === 'home') return 'Discover verified youth opportunities, training pathways and trusted partners across Africa.';
   if (state.view === 'about') return 'Learn what Jobs4Youth is, who it serves, and why it exists.';
   if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
   if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
+  if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
   if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
-  if (state.role === 'employer') return 'Post opportunities and shortlist best-fit young candidates.';
-  if (state.role === 'institution') return 'Publish courses and align training to real market demand.';
+  if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
+  if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
   return 'Verify partners, monitor activity and generate labour market intelligence.';
 }
+
 
 function setView(v) {
   state.view = v;
@@ -131,7 +441,7 @@ function setView(v) {
 function setRole(r) {
   if (currentUser) return;
   state.role = r;
-  state.view = r === 'admin' ? 'dashboard' : 'about';
+  state.view = r === 'admin' ? 'dashboard' : 'home';
   render();
 }
 
@@ -285,20 +595,40 @@ async function loadApplicationsFromSupabase() {
   }
 }
 
+
 async function loadVerificationQueueFromSupabase() {
   state.verificationItems = [];
   if (!isConfigured || !currentUser || state.role !== 'admin') return;
   const { data: queue, error } = await supabase.from('verification_queue').select('*').order('created_at', { ascending: false });
   if (error) { console.error('Error loading verification queue:', error); return; }
-
   const profileIds = [...new Set((queue || []).map(q => q.profile_id).filter(Boolean))];
   const oppIds = [...new Set((queue || []).filter(q => q.item_type === 'opportunity' && q.item_id).map(q => q.item_id))];
   const courseIds = [...new Set((queue || []).filter(q => q.item_type === 'course' && q.item_id).map(q => q.item_id))];
-
-  let profileMap = {}, oppMap = {}, courseMap = {};
+  let profileMap = {}, oppMap = {}, courseMap = {}, documentMap = {};
   if (profileIds.length) {
     const { data } = await supabase.from('profiles').select('id, full_name, email, role, organization_name, country, region, verified').in('id', profileIds);
     profileMap = Object.fromEntries((data || []).map(p => [p.id, p]));
+    const { data: docs, error: docsError } = await supabase.from('verification_documents').select('*').in('profile_id', profileIds).order('created_at', { ascending: false });
+    if (!docsError) {
+      documentMap = (docs || []).reduce((acc, doc) => {
+        const item = {
+          id: doc.id,
+          profileId: doc.profile_id,
+          fileName: doc.file_name || 'Document',
+          storagePath: doc.storage_path || '',
+          mimeType: doc.mime_type || '',
+          fileSize: doc.file_size || 0,
+          documentType: doc.document_type || 'Other Supporting Document',
+          reviewStatus: doc.review_status || 'Pending',
+          adminNotes: doc.admin_notes || '',
+          createdAt: doc.created_at || null,
+          updatedAt: doc.updated_at || null
+        };
+        acc[doc.profile_id] = acc[doc.profile_id] || [];
+        acc[doc.profile_id].push(item);
+        return acc;
+      }, {});
+    }
   }
   if (oppIds.length) {
     const { data } = await supabase.from('opportunities').select('*').in('id', oppIds);
@@ -308,7 +638,6 @@ async function loadVerificationQueueFromSupabase() {
     const { data } = await supabase.from('courses').select('*').in('id', courseIds);
     courseMap = Object.fromEntries((data || []).map(c => [c.id, c]));
   }
-
   state.verificationItems = (queue || []).map(item => ({
     id: item.id,
     itemType: item.item_type,
@@ -321,22 +650,107 @@ async function loadVerificationQueueFromSupabase() {
     ownerOrg: profileMap[item.profile_id]?.organization_name || '',
     ownerCountry: profileMap[item.profile_id]?.country || '',
     ownerRegion: profileMap[item.profile_id]?.region || '',
+    documents: documentMap[item.profile_id] || [],
     opportunity: item.item_type === 'opportunity' ? oppMap[item.item_id] || null : null,
     course: item.item_type === 'course' ? courseMap[item.item_id] || null : null
   }));
 }
 
+
+async function loadVerificationDocumentsFromSupabase() {
+  state.verificationDocuments = [];
+  if (!isConfigured || !currentUser || !['employer','institution','admin'].includes(state.role)) return;
+  let query = supabase.from('verification_documents').select('*').order('created_at', { ascending: false });
+  if (state.role !== 'admin') query = query.eq('profile_id', currentUser.id);
+  const { data, error } = await query;
+  if (error) {
+    console.error('Error loading verification documents:', error);
+    return;
+  }
+  state.verificationDocuments = (data || []).map(doc => ({
+    id: doc.id,
+    profileId: doc.profile_id,
+    fileName: doc.file_name || 'Document',
+    storagePath: doc.storage_path || '',
+    mimeType: doc.mime_type || '',
+    fileSize: doc.file_size || 0,
+    documentType: doc.document_type || 'Other Supporting Document',
+    reviewStatus: doc.review_status || 'Pending',
+    adminNotes: doc.admin_notes || '',
+    createdAt: doc.created_at || null,
+    updatedAt: doc.updated_at || null
+  }));
+}
+
+async function loadNotificationsFromSupabase() {
+  state.notifications = [];
+  if (!isConfigured || !currentUser) return;
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, user_id, actor_id, title, body, notification_type, related_entity_type, related_entity_id, is_read, created_at')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error loading notifications:', error);
+    return;
+  }
+  let emailStatusMap = {};
+  const { data: emails, error: emailError } = await supabase
+    .from('email_queue')
+    .select('related_entity_type, related_entity_id, queue_status, created_at')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+  if (!emailError) {
+    emailStatusMap = (emails || []).reduce((acc, item) => {
+      const key = `${item.related_entity_type || 'platform'}:${item.related_entity_id || item.created_at}`;
+      acc[key] = item.queue_status || 'Queued';
+      return acc;
+    }, {});
+  }
+  state.notifications = (data || []).map(item => ({
+    id: item.id,
+    userId: item.user_id,
+    actorId: item.actor_id,
+    title: item.title || 'Notification',
+    body: item.body || '',
+    notificationType: item.notification_type || 'platform_update',
+    relatedEntityType: item.related_entity_type || null,
+    relatedEntityId: item.related_entity_id || null,
+    isRead: !!item.is_read,
+    createdAt: item.created_at || null,
+    emailStatus: emailStatusMap[`${item.related_entity_type || 'platform'}:${item.related_entity_id || item.created_at}`] || ''
+  }));
+}
+
+window.markNotificationRead = async function(notificationId) {
+  if (!isConfigured || !currentUser || !notificationId) return;
+  const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId).eq('user_id', currentUser.id);
+  if (error) {
+    console.error('Notification mark-read error:', error);
+    return alert(`Failed to update notification: ${error.message}`);
+  }
+  await loadNotificationsFromSupabase();
+  render();
+};
+
+
+
+
 function renderShell() {
-  document.getElementById('nav').innerHTML = navItems().map(v => `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}</button>`).join('');
+  document.getElementById('nav').innerHTML = navItems().map(v => {
+    const unread = currentUser && v === 'notifications' ? latestUnreadCount() : 0;
+    return `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}${unread ? ` <span class="nav-badge">${unread}</span>` : ''}</button>`;
+  }).join('');
   const roles = currentUser ? [state.role] : ['youth', 'employer', 'institution', 'admin'];
   document.getElementById('roleSwitch').innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
   document.getElementById('kicker').textContent = isConfigured ? 'Connected workspace' : 'Starter workspace';
-  document.getElementById('pageTitle').textContent = title(state.view);
+  document.getElementById('pageTitle').textContent = state.view === 'home' ? 'Home' : title(state.view);
   document.getElementById('pageDesc').textContent = desc();
   if (!isConfigured) document.getElementById('authStatus').textContent = 'Add config.js to go live';
-  else if (currentUser) document.getElementById('authStatus').textContent = `Signed in: ${currentUser.email}`;
+  else if (currentUser) document.getElementById('authStatus').textContent = `Signed in: ${currentUser.email}${latestUnreadCount() ? ` • ${latestUnreadCount()} unread notification${latestUnreadCount() === 1 ? '' : 's'}` : ''}`;
   else document.getElementById('authStatus').textContent = 'Supabase configured';
 }
+
 
 function metrics() {
   return `
@@ -351,14 +765,30 @@ function metrics() {
 
 function jobCard(j, action) {
   const score = matchScore(j);
+  const status = j.status || 'Pending';
+  const isVerified = status === 'Verified';
+  const trustNote = isVerified
+    ? 'Publicly visible verified listing'
+    : status === 'Pending'
+      ? 'Awaiting review before wider visibility'
+      : status === 'Closed'
+        ? 'Listing no longer open for active applications'
+        : 'Status updated by platform moderation';
   return `
-    <div class="job">
+    <div class="job ${isVerified ? 'job-verified' : ''}">
       <div>
-        <h3>${escapeHtml(j.title)}</h3>
+        <div class="job-header-row">
+          <h3>${escapeHtml(j.title)}</h3>
+          <div class="job-badges">
+            ${statusBadge(status)}
+            ${isVerified ? '<span class="pill pill-verified">Trust checked</span>' : ''}
+          </div>
+        </div>
         <p><b>${escapeHtml(j.org)}</b> • ${escapeHtml(j.region)}, ${escapeHtml(j.country)} • ${escapeHtml(j.type)} • ${escapeHtml(j.experience)}</p>
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}<span class="pill">${escapeHtml(j.status || 'Pending')}</span></div>
+        <div class="trust-inline">${escapeHtml(trustNote)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -391,6 +821,15 @@ function actionSelect(label, id, options, selected, placeholder='Select option')
     </label>
   `;
 }
+function statusBadge(status) {
+  const safe = escapeHtml(status || 'Pending');
+  const key = String(status || 'Pending').toLowerCase();
+  let cls = 'status-neutral';
+  if (key === 'verified' || key === 'approved' || key === 'placed') cls = 'status-verified';
+  else if (key === 'pending' || key === 'submitted' || key === 'saved' || key === 'shortlisted') cls = 'status-pending';
+  else if (key === 'rejected' || key === 'closed') cls = 'status-rejected';
+  return `<span class="status-badge ${cls}">${safe}</span>`;
+}
 
 function trustPageShell(kicker, heading, bodyHtml) {
   return `
@@ -404,41 +843,294 @@ function trustPageShell(kicker, heading, bodyHtml) {
   `;
 }
 
+function featuredJobs(limit = 3) {
+  return [...state.jobs]
+    .filter(job => job.status === 'Verified')
+    .sort((a, b) => matchScore(b) - matchScore(a))
+    .slice(0, limit);
+}
+function featuredCourses(limit = 3) {
+  return [...state.courses]
+    .filter(course => course.status === 'Verified')
+    .slice(0, limit);
+}
+function publicJobTeaser(job) {
+  return `
+    <div class="mini-card">
+      <div class="mini-top">
+        ${statusBadge('Verified')}
+        <span class="pill pill-trust">Public trust</span>
+        <span class="pill">${escapeHtml(job.type || 'Opportunity')}</span>
+      </div>
+      <h4>${escapeHtml(job.title)}</h4>
+      <p><b>${escapeHtml(job.org)}</b></p>
+      <p class="label">${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')}</p>
+      <p class="label">${escapeHtml(job.experience || 'Open to early-career applicants')}</p>
+      <div class="trust-inline">Verified listing highlighted for safe public browsing</div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="secondary" onclick="setView('opportunities')">View opportunity</button>
+        <span class="pill">${matchScore(job)}% profile-fit ready</span>
+      </div>
+    </div>
+  `;
+}
+function publicCourseTeaser(course) {
+  return `
+    <div class="mini-card">
+      <div class="mini-top">
+        ${statusBadge('Verified')}
+        <span class="pill pill-trust">Skills pathway</span>
+        <span class="pill">${escapeHtml(course.mode || 'Training')}</span>
+      </div>
+      <h4>${escapeHtml(course.title)}</h4>
+      <p><b>${escapeHtml(course.provider)}</b></p>
+      <p class="label">${escapeHtml(course.region || 'Remote')}, ${escapeHtml(course.country || 'Multi-country')}</p>
+      <p class="label">${escapeHtml(course.duration || 'Flexible duration')}</p>
+      <div class="trust-inline">Verified learning offer for public browsing</div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="secondary" onclick="setView('training')">View training</button>
+        <span class="pill">Skills pathway</span>
+      </div>
+    </div>
+  `;
+}
+function homeSectionEmpty(titleText, bodyText, actionLabel, viewName) {
+  return `
+    <div class="empty-card">
+      <h4>${escapeHtml(titleText)}</h4>
+      <p class="label">${escapeHtml(bodyText)}</p>
+      <button class="secondary" onclick="setView('${escapeHtml(viewName)}')">${escapeHtml(actionLabel)}</button>
+    </div>
+  `;
+}
+function home() {
+  const jobs = featuredJobs(3);
+  const courses = featuredCourses(3);
+  return `
+    <div class="grid home-grid">
+      <div class="card span-8 hero-card">
+        <div class="hero-copy">
+          <div class="kicker">Public launch platform</div>
+          <h3 class="hero-title">Verified youth opportunities, internships and skills pathways in one trusted platform</h3>
+          <p class="hero-text">Jobs4Youth helps young people discover credible opportunities, supports employers to reach job-ready talent, and enables institutions to publish relevant training offers across African labour markets.</p>
+          <div class="hero-actions">
+            <button class="primary" onclick="setView('opportunities')">Browse opportunities</button>
+            <button class="secondary" onclick="setView('training')">Browse training</button>
+            <button class="secondary" onclick="openSignup()">Create account</button>
+            <button class="secondary" onclick="openLogin()">Sign in</button>
+          </div>
+          <div class="hero-points">
+            <span class="pill pill-verified">Verified listings</span>
+            <span class="pill">Trusted employer and institution workflows</span>
+            <span class="pill">Career pathways and skills visibility</span>
+          </div>
+        </div>
+      </div>
+      <div class="card span-4 hero-panel">
+        <h3>Why Jobs4Youth</h3>
+        <div class="feature-stat"><span class="metric">${state.jobs.filter(j => j.status === 'Verified').length}</span><span class="label">verified opportunities currently visible</span></div>
+        <div class="feature-stat"><span class="metric">${state.courses.filter(c => c.status === 'Verified').length}</span><span class="label">verified training offers and skills pathways</span></div>
+        <div class="feature-stat"><span class="metric">4</span><span class="label">connected user groups: youth, employers, institutions and admins</span></div>
+        <div class="soft-note">Public listings are moderated through platform governance and role-based review workflows.</div>
+      </div>
+
+      <div class="card span-12">${onboardingPanel()}</div>
+
+      <div class="card span-12">
+        <div class="section-title"><h3>Choose your pathway</h3><span class="pill">Public quick start</span></div>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h4>For youth</h4>
+            <p>Find jobs, internships, apprenticeships and training offers that match your location, education and skills interests.</p>
+            <button class="secondary" onclick="setView('opportunities')">Explore opportunities</button>
+          </div>
+          <div class="feature-card">
+            <h4>For employers</h4>
+            <p>Publish opportunities, review candidate applications and participate in a more trusted, moderated recruitment workflow.</p>
+            <button class="secondary" onclick="openSignup()">Create employer account</button>
+          </div>
+          <div class="feature-card">
+            <h4>For institutions</h4>
+            <p>Promote training programmes that respond to labour-market demand and help young people close skills gaps faster.</p>
+            <button class="secondary" onclick="openSignup()">Create institution account</button>
+          </div>
+          <div class="feature-card">
+            <h4>For partners and administrators</h4>
+            <p>Support transparent verification, moderation and labour-market visibility across the platform ecosystem.</p>
+            <button class="secondary" onclick="setView('about')">Learn more</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-7">
+        <div class="section-title"><h3>Featured verified opportunities</h3><button class="secondary" onclick="setView('opportunities')">View all opportunities</button></div>
+        <p class="label">Only public-facing verified listings are highlighted here to improve trust and relevance.</p>
+        <div class="mini-grid">
+          ${jobs.length ? jobs.map(publicJobTeaser).join('') : homeSectionEmpty('No verified opportunities yet', 'Once reviewed opportunities are published, featured roles will appear here for public browsing.', 'Open opportunity marketplace', 'opportunities')}
+        </div>
+      </div>
+
+      <div class="card span-5">
+        <div class="section-title"><h3>Featured training pathways</h3><button class="secondary" onclick="setView('training')">View all training</button></div>
+        <p class="label">Training providers can publish moderated learning offers aligned to market demand and youth pathways.</p>
+        <div class="mini-grid single-column">
+          ${courses.length ? courses.map(publicCourseTeaser).join('') : homeSectionEmpty('No verified training yet', 'Verified courses and skills programmes will appear here once institutions publish and admins approve them.', 'Browse training catalogue', 'training')}
+        </div>
+      </div>
+
+      <div class="card span-12 trust-strip">
+        <div class="section-title"><h3>Built for public trust and real-world use</h3><span class="pill pill-verified">Moderated platform</span></div>
+        <div class="trust-grid">
+          <div class="trust-card">
+            <h4>Verification-first publishing</h4>
+            <p class="label">Employer and institution participation is supported by verification workflows, while new opportunities and courses go through review before they are promoted.</p>
+          </div>
+          <div class="trust-card">
+            <h4>Structured profiles and cleaner data</h4>
+            <p class="label">The platform already uses role-based profiles, structured fields and protected access rules to support safer public use and better matching.</p>
+          </div>
+          <div class="trust-card">
+            <h4>Actionable pathways for youth</h4>
+            <p class="label">Jobs4Youth is not only a vacancy site — it also connects opportunities, training and labour market signals in one evolving ecosystem.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-12 final-cta">
+        <div>
+          <div class="kicker">Ready to get started?</div>
+          <h3>Join the Jobs4Youth network</h3>
+          <p class="label">Create an account to apply for opportunities, publish vacancies, share training offers or manage verification workflows.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="primary" onclick="openSignup()">Create account</button>
+          <button class="secondary" onclick="openLogin()">Sign in</button>
+          <button class="secondary" onclick="setView('contact')">Contact platform team</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
 function youthDash() {
   const ranked = [...state.jobs].sort((a, b) => matchScore(b) - matchScore(a));
+  const completion = youthProfileCompletion();
   return `
-    <div class="notice"><b>Professional upgrade:</b> structured drop-down fields and public trust pages have been added for a more professional public-facing platform.</div>
+    ${onboardingPanel()}
+    <div class="notice"><b>Professional guidance:</b> verified public listings, profile completeness prompts and skills pathways are now visible to help first-time users navigate the platform more confidently.</div>
+    ${completionCard('Profile completeness', completion, 'A fuller profile improves match quality, trust and opportunity relevance.', 'Complete youth profile')}
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-8">
         <div class="section-title"><h3>Best matches for ${escapeHtml(state.profile.name || 'you')}</h3><button class="secondary" onclick="setView('opportunities')">View all</button></div>
-        ${ranked.slice(0, 3).map(j => jobCard(j, true)).join('') || '<p class="label">No verified opportunities yet.</p>'}
+        ${ranked.slice(0, 3).length ? ranked.slice(0, 3).map(j => jobCard(j, true)).join('') : `<div class="empty-card"><h4>No verified opportunities yet</h4><p class="label">Once moderated listings are available, your strongest matches will appear here automatically.</p><button class="secondary" onclick="setView('opportunities')">Browse all opportunities</button></div>`}
       </div>
       <div class="card span-4">
         <h3>Recommended skills pathway</h3>
-        ${(state.courses.length ? state.courses : []).slice(0,4).map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)}</span></p>`).join('') || '<p class="label">No verified training offers yet.</p>'}
+        ${state.courses.length ? state.courses.slice(0,4).map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)}</span></p>`).join('') : `<div class="empty-card"><h4>No verified training offers yet</h4><p class="label">Training pathways will appear here as verified institutions publish relevant offers.</p><button class="secondary" onclick="setView('training')">Browse training</button></div>`}
       </div>
     </div>
   `;
 }
 
 function opportunities() {
-  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Opportunity marketplace</h3></div>${[...state.jobs].sort((a,b)=>matchScore(b)-matchScore(a)).map(j=>jobCard(j,true)).join('') || '<p class="label">No opportunities available yet.</p>'}</div></div>`;
+  const list = filteredJobs();
+  const f = browseFilters.jobs;
+  const controls = `
+    <label>
+      Keyword
+      <input value="${escapeHtml(f.keyword)}" placeholder="Search title, organisation, skills" oninput="setOpportunityFilter('keyword', this.value)" />
+    </label>
+    ${actionSelect('Country', 'oppFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="oppFilterCountry"', `<select id="oppFilterCountry" onchange="setOpportunityFilter('country', this.value)"`)}
+    <label>
+      Region / City
+      <input value="${escapeHtml(f.region)}" placeholder="e.g. Nairobi" oninput="setOpportunityFilter('region', this.value)" />
+    </label>
+    ${actionSelect('Opportunity type', 'oppFilterType', OPTION_SETS.opportunityTypes, f.type, 'All opportunity types').replace('<select id="oppFilterType"', `<select id="oppFilterType" onchange="setOpportunityFilter('type', this.value)"`)}
+    ${actionSelect('Education requirement', 'oppFilterEducation', OPTION_SETS.educationLevels, f.education, 'All education levels').replace('<select id="oppFilterEducation"', `<select id="oppFilterEducation" onchange="setOpportunityFilter('education', this.value)"`)}
+    ${actionSelect('Experience requirement', 'oppFilterExperience', OPTION_SETS.experienceLevels, f.experience, 'All experience levels').replace('<select id="oppFilterExperience"', `<select id="oppFilterExperience" onchange="setOpportunityFilter('experience', this.value)"`)}
+  `;
+  return `
+    <div class="grid">
+      <div class="card span-12">
+        ${onboardingPanel()}
+        ${filtersPanel('Search the opportunity marketplace', 'Use structured filters to quickly find roles by keyword, country, location, type and requirements.', controls, 'clearOpportunityFilters')}
+        <div class="results-meta">
+          <span class="pill pill-verified">${list.length} result${list.length === 1 ? '' : 's'}</span>
+          <span class="pill">Verified and visible listings only</span>
+          <span class="pill pill-trust">Platform-moderated public marketplace</span>
+        </div>
+        <div class="notice trust-notice"><b>Trust signal:</b> Jobs4Youth highlights moderated, structured listings to improve public confidence and reduce misleading vacancies.</div>
+        <div style="margin-top:14px;">
+          ${list.length ? list.map(j => jobCard(j, true)).join('') : `
+            <div class="empty-card">
+              <h4>No opportunities matched your search</h4>
+              <p class="label">Try removing one or more filters, widening the location field, or browsing all verified listings.</p>
+              <div class="hero-actions">
+                <button class="secondary" onclick="clearOpportunityFilters()">Reset opportunity filters</button>
+                <button class="secondary" onclick="setView('home')">Return home</button>
+              </div>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function training() {
+  const list = filteredCourses();
+  const f = browseFilters.courses;
+  const controls = `
+    <label>
+      Keyword
+      <input value="${escapeHtml(f.keyword)}" placeholder="Search title, provider, skills" oninput="setCourseFilter('keyword', this.value)" />
+    </label>
+    ${actionSelect('Country', 'courseFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="courseFilterCountry"', `<select id="courseFilterCountry" onchange="setCourseFilter('country', this.value)"`)}
+    <label>
+      Region / City
+      <input value="${escapeHtml(f.region)}" placeholder="e.g. Remote or Nairobi" oninput="setCourseFilter('region', this.value)" />
+    </label>
+    ${actionSelect('Delivery mode', 'courseFilterMode', OPTION_SETS.deliveryModes, f.mode, 'All delivery modes').replace('<select id="courseFilterMode"', `<select id="courseFilterMode" onchange="setCourseFilter('mode', this.value)"`)}
+  `;
   return `
     <div class="grid">
-      ${state.courses.map(c => `
-        <div class="card span-4">
-          <h3>${escapeHtml(c.title)}</h3>
-          <p>${escapeHtml(c.provider)}</p>
-          <p class="label">${escapeHtml(c.mode)} • ${escapeHtml(c.duration)}</p>
-          <p class="label">${escapeHtml(c.region)}, ${escapeHtml(c.country)}</p>
-          <p><span class="pill">${escapeHtml(c.status || 'Pending')}</span></p>
-          ${(c.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}
+      <div class="card span-12">
+        ${onboardingPanel()}
+        ${filtersPanel('Search training and skills pathways', 'Use keyword, location and delivery-mode filters to find relevant verified learning offers.', controls, 'clearCourseFilters')}
+        <div class="results-meta">
+          <span class="pill pill-verified">${list.length} result${list.length === 1 ? '' : 's'}</span>
+          <span class="pill">Curated training catalogue</span>
+          <span class="pill pill-trust">Verified learning pathways</span>
         </div>
-      `).join('') || '<div class="card span-12"><p class="label">No training offers available yet.</p></div>'}
+      </div>
+      <div class="card span-12 trust-banner-card"><div class="notice trust-notice"><b>Trust signal:</b> Training offers shown here are intended to support relevant, structured and more credible skills pathways for young people.</div></div>
+      ${list.length ? list.map(c => `
+        <div class="card span-4 course-card-public ${c.status === 'Verified' ? 'job-verified' : ''}">
+          <div class="mini-top">
+            ${statusBadge(c.status || 'Verified')}
+            ${c.mode ? `<span class="pill">${escapeHtml(c.mode)}</span>` : ''}
+          </div>
+          <h3>${escapeHtml(c.title)}</h3>
+          <p><b>${escapeHtml(c.provider)}</b></p>
+          <p class="label">${escapeHtml(c.region || 'Remote')}, ${escapeHtml(c.country || 'Multi-country')}</p>
+          <p class="label">${escapeHtml(c.duration || 'Duration available on listing')}</p>
+          <div>${(c.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
+          <div class="trust-inline">Verified learning offer for public browsing</div>
+        </div>
+      `).join('') : `
+        <div class="card span-12">
+          <div class="empty-card">
+            <h4>No training matched your search</h4>
+            <p class="label">Adjust country, region or delivery mode — or clear filters to browse all visible verified training offers.</p>
+            <div class="hero-actions">
+              <button class="secondary" onclick="clearCourseFilters()">Reset training filters</button>
+              <button class="secondary" onclick="setView('home')">Return home</button>
+            </div>
+          </div>
+        </div>
+      `}
     </div>
   `;
 }
@@ -459,7 +1151,28 @@ function youthProfileForm() {
   `;
 }
 
+
 function organizationProfileForm(label) {
+  const verificationState = state.profile.verified ? 'Verified organisation profile' : 'Pending admin verification';
+  const verificationText = state.profile.verified
+    ? 'Your organisation profile has passed platform verification and can participate with stronger public trust signals.'
+    : 'Your organisation profile is saved, and uploaded verification documents plus admin review messages will help complete verification more professionally.';
+  const docs = state.verificationDocuments || [];
+  const latestDecision = latestVerificationNotification();
+  const decisionMessage = latestDecision ? `
+    <div class="decision-message-card ${latestDecision.notificationType.includes('rejected') ? 'decision-message-negative' : 'decision-message-positive'}">
+      <div class="section-title">
+        <div>
+          <h4>${escapeHtml(latestDecision.title)}</h4>
+          <p class="label">${escapeHtml(latestDecision.body)}</p>
+        </div>
+        <span class="pill">${escapeHtml(new Date(latestDecision.createdAt).toLocaleDateString())}</span>
+      </div>
+    </div>
+  ` : '';
+  const docSummary = docs.length
+    ? `<div class="results-meta"><span class="pill pill-verified">${docs.length} uploaded document${docs.length === 1 ? '' : 's'}</span><span class="pill">${docs.filter(d => d.reviewStatus === 'Approved').length} approved</span><span class="pill">${docs.filter(d => d.reviewStatus === 'Pending').length} pending</span></div>`
+    : `<div class="soft-note">No verification documents uploaded yet. Upload at least one supporting document to strengthen verification review.</div>`;
   return `
     <div class="form">
       <label>Contact person / name<input id="orgProfileName" value="${escapeHtml(state.profile.name || '')}"/></label>
@@ -467,11 +1180,38 @@ function organizationProfileForm(label) {
       ${actionSelect('Sector','orgSector', OPTION_SETS.sectors, state.profile.sector, 'Choose sector')}
       ${actionSelect('Country','orgCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
       <label>Region / City<input id="orgRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
-      <div class="full notice"><b>Verification status:</b> ${state.profile.verified ? 'Verified' : 'Pending admin verification'}</div>
+      <div class="full verification-panel ${state.profile.verified ? 'verification-panel-verified' : 'verification-panel-pending'}">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">${statusBadge(verificationState)} ${state.profile.verified ? '<span class="pill pill-verified">Public trust enabled</span>' : '<span class="pill">Review in progress</span>'}</div>
+        <div class="label" style="margin-top:8px;">${escapeHtml(verificationText)}</div>
+      </div>
+      ${decisionMessage}
       <button class="primary full" onclick="saveOrganizationProfile()">Save organisation profile</button>
+      <div class="full verification-docs-panel">
+        <div class="section-title"><div><h3>Verification documents</h3><p class="label">${escapeHtml(documentUploadGuidance(state.role))}</p></div><span class="pill">Private upload</span></div>
+        ${docSummary}
+        <div class="soft-note" style="margin-top:12px;">Verification decisions now also create in-app notifications and email-ready queue records for clearer communication.</div>
+        <div class="document-upload-grid">
+          <label>
+            Document type
+            <select id="verificationDocumentType">${renderOptions(OPTION_SETS.verificationDocumentTypes, '', 'Choose document type')}</select>
+          </label>
+          <label>
+            Upload file
+            <input id="verificationDocumentFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" />
+          </label>
+        </div>
+        <div class="hero-actions" style="margin-top:12px;">
+          <button class="primary" onclick="uploadVerificationDocument()">Upload verification document</button>
+        </div>
+        <div class="label" id="verificationDocumentMessage" style="margin-top:10px;"></div>
+        <div class="document-list" style="margin-top:14px;">
+          ${docs.length ? docs.map(doc => documentReviewCard(doc, false)).join('') : `<div class="empty-card"><h4>No verification documents uploaded yet</h4><p class="label">Upload registration, tax, licence or authorisation evidence so the admin team can review your organisation faster.</p></div>`}
+        </div>
+      </div>
     </div>
   `;
 }
+
 
 function profile() {
   const content = state.role === 'youth'
@@ -480,15 +1220,22 @@ function profile() {
     ? organizationProfileForm('Organisation name')
     : organizationProfileForm('Institution name');
   const heading = state.role === 'youth' ? 'Youth profile' : state.role === 'employer' ? 'Employer profile' : 'Institution profile';
-  return `<div class="card"><h3>${heading}</h3>${content}</div>`;
+  const completion = state.role === 'youth' ? youthProfileCompletion() : organisationProfileCompletion();
+  const guidance = state.role === 'youth'
+    ? completionCard('Youth profile readiness', completion, 'Complete your core profile fields to improve matching and application readiness.', 'Complete youth profile')
+    : completionCard('Organisation profile readiness', completion, 'Complete your organisation details to strengthen public trust and moderation readiness.', 'Complete organisation profile');
+  return `<div class="grid"><div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}</div></div>`;
 }
 
 function employerDash() {
   const myJobs = currentUser ? state.jobs.filter(j => j.postedBy === currentUser.id) : [];
+  const completion = organisationProfileCompletion();
   return `
+    ${onboardingPanel()}
+    ${completionCard('Employer profile readiness', completion, 'A stronger employer profile improves confidence before candidates engage with your opportunities.', 'Complete employer profile')}
     ${metrics()}
     <div class="grid" style="margin-top:18px">
-      <div class="card span-7"><div class="section-title"><h3>Your posted opportunities</h3><button class="secondary" onclick="setView('post opportunity')">Post new</button></div>${myJobs.length ? myJobs.map(j => jobCard(j, false)).join('') : '<p class="label">You have not posted any opportunities yet.</p>'}</div>
+      <div class="card span-7"><div class="section-title"><h3>Your posted opportunities</h3><button class="secondary" onclick="setView('post opportunity')">Post new</button></div>${myJobs.length ? myJobs.map(j => jobCard(j, false)).join('') : `<div class="empty-card"><h4>No opportunities posted yet</h4><p class="label">Complete your organisation profile, then publish your first moderated opportunity to start attracting candidates.</p><button class="secondary" onclick="setView('post opportunity')">Post your first opportunity</button></div>`}</div>
       <div class="card span-5"><h3>Applications received</h3><div class="metric">${state.employerCandidates.length}</div><p class="label">Candidates who applied to your posted opportunities.</p><button class="secondary" onclick="setView('candidates')">Open candidates</button></div>
     </div>
   `;
@@ -555,16 +1302,19 @@ function candidates() {
   return `
     <div class="card"><div class="section-title"><h3>Candidate applications</h3><button class="secondary" onclick="setView('post opportunity')">Post another opportunity</button></div>${state.employerCandidates.length ? state.employerCandidates.map(c => `
       <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
-    `).join('') : '<p class="label">No applications received yet for your opportunities.</p>'}</div>
+    `).join('') : `<div class="empty-card"><h4>No applications received yet</h4><p class="label">Once candidates apply to your opportunities, they will appear here with profile details for review.</p><button class="secondary" onclick="setView('post opportunity')">Post opportunity</button></div>`}</div>
   `;
 }
 
 function institutionDash() {
   const myCourses = currentUser ? state.courses.filter(c => c.postedBy === currentUser.id) : [];
+  const completion = organisationProfileCompletion();
   return `
+    ${onboardingPanel()}
+    ${completionCard('Institution profile readiness', completion, 'Complete your provider information to strengthen learner confidence and training discoverability.', 'Complete institution profile')}
     ${metrics()}
     <div class="grid" style="margin-top:18px">
-      <div class="card span-6"><div class="section-title"><h3>Your training catalogue</h3><button class="secondary" onclick="setView('post training')">Post training</button></div>${myCourses.length ? myCourses.map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)} • ${escapeHtml(c.region)}, ${escapeHtml(c.country)}</span><br><span class="pill">${escapeHtml(c.status)}</span></p>`).join('') : '<p class="label">No courses posted yet.</p>'}</div>
+      <div class="card span-6"><div class="section-title"><h3>Your training catalogue</h3><button class="secondary" onclick="setView('post training')">Post training</button></div>${myCourses.length ? myCourses.map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)} • ${escapeHtml(c.region)}, ${escapeHtml(c.country)}</span><br>${statusBadge(c.status)}</p>`).join('') : `<div class="empty-card"><h4>No courses posted yet</h4><p class="label">Publish your first training offer to begin building a visible learning catalogue on the platform.</p><button class="secondary" onclick="setView('post training')">Post first training</button></div>`}</div>
       <div class="card span-6"><h3>Demand signals</h3>${bar('Food safety', 92)}${bar('Record keeping', 78)}${bar('Mechanization', 61)}${bar('Quality control', 57)}</div>
     </div>
   `;
@@ -623,7 +1373,16 @@ window.submitCourse = async function() {
 
 function courses() { return training(); }
 
+
 function verificationCard(item) {
+  const docSection = ['employer','institution'].includes(item.itemType)
+    ? `
+      <div class="verification-docs-inline">
+        <h4 style="margin:12px 0 8px;">Verification documents</h4>
+        ${item.documents && item.documents.length ? item.documents.map(doc => documentReviewCard(doc, true)).join('') : `<div class="soft-note">No verification documents uploaded yet for this organisation.</div>`}
+      </div>
+    `
+    : '';
   const details = item.itemType === 'opportunity' && item.opportunity ? `
     <p><b>${escapeHtml(item.opportunity.title)}</b></p>
     <p class="label">${escapeHtml(item.opportunity.organization_name || '')} • ${escapeHtml(item.opportunity.region || '')}, ${escapeHtml(item.opportunity.country || '')}</p>
@@ -633,13 +1392,14 @@ function verificationCard(item) {
   ` : `
     <p><b>${escapeHtml(title(item.itemType))} verification</b></p>
     <p class="label">${escapeHtml(item.ownerName)} ${item.ownerEmail ? '• ' + escapeHtml(item.ownerEmail) : ''}</p>
+    ${item.ownerOrg ? `<p class="label">${escapeHtml(item.ownerOrg)} • ${escapeHtml(item.ownerRegion || '')}, ${escapeHtml(item.ownerCountry || '')}</p>` : ''}
   `;
-
   return `
-    <div class="job">
+    <div class="job verification-job">
       <div>
         <h3>${escapeHtml(title(item.itemType))} • ${escapeHtml(item.reviewStatus)}</h3>
         ${details}
+        ${docSection}
         <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
       </div>
       <div class="fit" style="--score:${item.reviewStatus === 'Approved' ? 100 : item.reviewStatus === 'Rejected' ? 30 : 60}"><span>${item.reviewStatus === 'Approved' ? '✓' : item.reviewStatus === 'Rejected' ? '✕' : '…'}</span></div>
@@ -647,18 +1407,22 @@ function verificationCard(item) {
   `;
 }
 
+
+
 function adminDash() {
   const pendingCount = state.verificationItems.filter(i => i.reviewStatus === 'Pending').length;
+  const unread = latestUnreadCount();
   return `
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-4"><div class="label">Pending verification items</div><div class="metric">${pendingCount}</div></div>
-      <div class="card span-4"><div class="label">Approved items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Approved').length}</div></div>
-      <div class="card span-4"><div class="label">Rejected items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Rejected').length}</div></div>
+      <div class="card span-4"><div class="label">Unread notifications</div><div class="metric">${unread}</div></div>
+      <div class="card span-4"><div class="label">Decision messaging active</div><div class="metric">Yes</div></div>
     </div>
-    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place.</p></div><div class="card span-5"><h3>Professional launch checklist</h3><p class="label">• custom domain<br>• legal pages<br>• structured forms<br>• visible verification badges</p></div></div>
+    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place with document evidence and queued decision notifications.</p></div><div class="card span-5"><h3>Notification workflow</h3><p class="label">• in-app notifications<br>• email-ready message queue<br>• verification decision messaging<br>• user-facing notifications centre</p></div></div>
   `;
 }
+
 
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
@@ -666,7 +1430,7 @@ function verification() {
   return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
 }
 
-window.refreshAdminQueue = async function() { await loadVerificationQueueFromSupabase(); render(); };
+
 
 window.reviewVerification = async function(queueId, decision) {
   if (!isConfigured || !currentUser) return;
@@ -681,25 +1445,154 @@ window.reviewVerification = async function(queueId, decision) {
     if (error) { if (msg) msg.textContent = `Failed to update profile verification: ${error.message}`; return; }
   }
   if (item.itemType === 'opportunity' && item.itemId) {
-    const updates = { updated_at: new Date().toISOString() };
-    if (approved) updates.status = 'Verified';
+    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Rejected' };
     const { error } = await supabase.from('opportunities').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update opportunity: ${error.message}`; return; }
   }
   if (item.itemType === 'course' && item.itemId) {
-    const updates = { updated_at: new Date().toISOString() };
-    if (approved) updates.status = 'Verified';
+    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Rejected' };
     const { error } = await supabase.from('courses').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update course: ${error.message}`; return; }
   }
   const { error: queueError } = await supabase.from('verification_queue').update({ review_status: approved ? 'Approved' : 'Rejected', reviewer_id: currentUser.id, review_notes: note, updated_at: new Date().toISOString() }).eq('id', queueId);
   if (queueError) { if (msg) msg.textContent = `Failed to update verification queue: ${queueError.message}`; return; }
+
+  const subject = approved
+    ? `${title(item.itemType)} verification approved`
+    : `${title(item.itemType)} verification requires attention`;
+  const body = approved
+    ? `Your ${item.itemType} verification has been approved on Jobs4Youth.${note ? ' Admin note: ' + note : ''}`
+    : `Your ${item.itemType} verification was not approved yet.${note ? ' Admin note: ' + note : ' Please review your submission and update your information as needed.'}`;
+  await enqueuePlatformNotification({
+    userId: item.profileId,
+    actorId: currentUser.id,
+    recipientEmail: item.ownerEmail || '',
+    title: subject,
+    body,
+    notificationType: approved ? 'verification_approved' : 'verification_rejected',
+    relatedEntityType: item.itemType,
+    relatedEntityId: item.itemId || item.profileId
+  });
+
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
+  await loadVerificationDocumentsFromSupabase();
   await loadVerificationQueueFromSupabase();
-  alert(`✅ ${decision} successfully.`);
+  await loadNotificationsFromSupabase();
+  alert(`✅ ${decision} successfully. Notification and email queue records were created.`);
   render();
 };
+
+
+
+window.refreshAdminQueue = async function() {
+  await loadVerificationQueueFromSupabase();
+  await loadVerificationDocumentsFromSupabase();
+  render();
+};
+
+window.openVerificationDocument = async function(storagePath) {
+  if (!isConfigured || !supabase || !storagePath) return alert('Document path is missing.');
+  const { data, error } = await supabase.storage.from('verification-documents').createSignedUrl(storagePath, 60);
+  if (error || !data?.signedUrl) {
+    console.error('Signed URL error:', error);
+    return alert(`Unable to open document: ${error?.message || 'Signed URL failed.'}`);
+  }
+  window.open(data.signedUrl, '_blank', 'noopener');
+};
+
+window.updateVerificationDocumentStatus = async function(documentId, nextStatus) {
+  if (!isConfigured || !currentUser || state.role !== 'admin') return alert('Only admins can review verification documents.');
+  const note = prompt(`Optional admin note for ${nextStatus.toLowerCase()}:`, '') || '';
+  const { error } = await supabase.from('verification_documents').update({ review_status: nextStatus, admin_notes: note, updated_at: new Date().toISOString() }).eq('id', documentId);
+  if (error) {
+    console.error('Verification document update error:', error);
+    return alert(`Failed to update document review status: ${error.message}`);
+  }
+  await loadVerificationDocumentsFromSupabase();
+  await loadVerificationQueueFromSupabase();
+  render();
+  alert(`✅ Document marked as ${nextStatus}.`);
+};
+
+window.uploadVerificationDocument = async function() {
+  const msg = document.getElementById('verificationDocumentMessage');
+  if (msg) msg.textContent = '';
+  if (!isConfigured || !supabase) {
+    if (msg) msg.textContent = 'Supabase is not connected yet.';
+    return;
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) {
+    if (msg) msg.textContent = 'Please sign in first.';
+    return;
+  }
+  const profile = await ensureProfile(user);
+  if (!profile || !['employer','institution','admin'].includes(profile.role)) {
+    if (msg) msg.textContent = 'Only employer, institution or admin accounts can upload verification documents.';
+    return;
+  }
+  const type = document.getElementById('verificationDocumentType')?.value || '';
+  const fileInput = document.getElementById('verificationDocumentFile');
+  const file = fileInput?.files?.[0];
+  if (!type || !file) {
+    if (msg) msg.textContent = 'Please choose a document type and select a file.';
+    return;
+  }
+  const maxBytes = 10 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    if (msg) msg.textContent = 'Please upload a file smaller than 10 MB.';
+    return;
+  }
+  const safeName = sanitizeFileName(file.name);
+  const storagePath = `${user.id}/${Date.now()}-${safeName}`;
+  const { error: uploadError } = await supabase.storage.from('verification-documents').upload(storagePath, file, { upsert: false });
+  if (uploadError) {
+    console.error('Verification document upload error:', uploadError);
+    if (msg) msg.textContent = `Failed to upload document: ${uploadError.message}`;
+    return;
+  }
+  const { error: insertError } = await supabase.from('verification_documents').insert([{
+    profile_id: user.id,
+    file_name: file.name,
+    storage_path: storagePath,
+    mime_type: file.type || 'application/octet-stream',
+    file_size: file.size || 0,
+    document_type: type,
+    review_status: 'Pending'
+  }]);
+  if (insertError) {
+    console.error('Verification document metadata insert error:', insertError);
+    if (msg) msg.textContent = `Document uploaded, but metadata save failed: ${insertError.message}`;
+    return;
+  }
+  await ensureVerificationRequest(profile, profile.role);
+  if (fileInput) fileInput.value = '';
+  const typeEl = document.getElementById('verificationDocumentType');
+  if (typeEl) typeEl.value = '';
+  if (msg) msg.textContent = 'Verification document uploaded successfully and is now pending admin review.';
+  await loadVerificationDocumentsFromSupabase();
+  if (state.role === 'admin') await loadVerificationQueueFromSupabase();
+  render();
+};
+
+function notificationsCenter() {
+  const items = state.notifications || [];
+  const unread = items.filter(item => !item.isRead).length;
+  return `
+    <div class="grid">
+      <div class="card span-12">
+        <div class="section-title"><h3>Notifications centre</h3><span class="pill pill-verified">${unread} unread</span></div>
+        <p class="label">View in-app alerts, email-queue status, and verification decision messages from one place.</p>
+        <div class="notice trust-notice"><b>Email workflow note:</b> platform actions now queue email-ready notifications for operational sending, while users immediately see the same message inside the app.</div>
+      </div>
+      <div class="card span-12">
+        ${items.length ? items.map(notificationCard).join('') : `<div class="empty-card"><h4>No notifications yet</h4><p class="label">Once the platform creates updates for your account, they will appear here with in-app and email queue visibility.</p></div>`}
+      </div>
+    </div>
+  `;
+}
 
 function insights() {
   return trustPageShell('Insights', 'Skills demand dashboard', `${bar('Food safety', 92)}${bar('Packaging', 78)}${bar('Record keeping', 74)}${bar('Dairy', 63)}${bar('Mechanization', 58)}${bar('Quality control', 57)}`);
@@ -820,19 +1713,23 @@ function bar(label, n) {
   return `<p><b>${escapeHtml(label)}</b></p><div class="chartbar"><div style="width:${n}%"></div></div><p class="label">${n}% relative demand signal</p>`;
 }
 
+
 function render() {
   renderShell();
   let c = '';
-  if (state.view === 'about') c = about();
+  if (state.view === 'home') c = home();
+  else if (state.view === 'about') c = about();
   else if (state.view === 'privacy') c = privacy();
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
+  else if (state.view === 'notifications') c = notificationsCenter();
   else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
-  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : contact();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
   document.getElementById('content').innerHTML = c;
 }
+
 
 function openAuthModal(mode = 'login') {
   authMode = mode;
@@ -858,6 +1755,9 @@ function updateAuthModal() {
 }
 
 function demoSignIn() { openAuthModal('login'); }
+window.openLogin = () => openAuthModal('login');
+window.openSignup = () => openAuthModal('signup');
+
 
 async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
@@ -868,7 +1768,6 @@ async function handleAuthSubmit() {
   const msg = document.getElementById('authMessage');
   msg.textContent = '';
   if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
-
   let authResult;
   try {
     authResult = authMode === 'signup'
@@ -884,7 +1783,6 @@ async function handleAuthSubmit() {
     msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
     return;
   }
-
   currentUser = authResult.data.user || authResult.data.session?.user || null;
   if (currentUser) {
     let profile = await ensureProfile(currentUser);
@@ -900,16 +1798,21 @@ async function handleAuthSubmit() {
   await loadCoursesFromSupabase();
   await loadApplicationsFromSupabase();
   await loadVerificationQueueFromSupabase();
+  await loadVerificationDocumentsFromSupabase();
+  await loadNotificationsFromSupabase();
   closeAuthModal();
   state.view = 'dashboard';
   render();
 }
 
+
 async function signOut() {
   if (isConfigured && supabase) await supabase.auth.signOut();
   currentUser = null;
   state = structuredClone(demoState);
-  state.view = 'about';
+  browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
+  browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
+  state.view = 'home';
   render();
   alert('Signed out.');
 }
@@ -957,8 +1860,9 @@ window.saveOrganizationProfile = async function () {
   render();
 };
 
+
 async function initializeApp() {
-  state.view = 'about';
+  state.view = 'home';
   if (isConfigured && supabase) {
     const { data: sessionData, error } = await supabase.auth.getSession();
     if (!error && sessionData?.session?.user) {
@@ -971,6 +1875,8 @@ async function initializeApp() {
     await loadCoursesFromSupabase();
     await loadApplicationsFromSupabase();
     await loadVerificationQueueFromSupabase();
+    await loadVerificationDocumentsFromSupabase();
+    await loadNotificationsFromSupabase();
     supabase.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       if (currentUser) {
@@ -979,17 +1885,22 @@ async function initializeApp() {
         state.view = 'dashboard';
       } else {
         state = structuredClone(demoState);
-        state.view = 'about';
+        browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
+        browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
+        state.view = 'home';
       }
       await loadJobsFromSupabase();
       await loadCoursesFromSupabase();
       await loadApplicationsFromSupabase();
       await loadVerificationQueueFromSupabase();
+      await loadVerificationDocumentsFromSupabase();
+      await loadNotificationsFromSupabase();
       render();
     });
   }
   render();
 }
+
 
 document.getElementById('btnSignIn').addEventListener('click', demoSignIn);
 document.getElementById('btnSignOut').addEventListener('click', signOut);
