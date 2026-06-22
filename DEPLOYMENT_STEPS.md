@@ -58,7 +58,7 @@ After local testing works:
 
 ### Production cutover checklist
 Before public announcement:
-1. Replace placeholder contact emails on the Contact page
+1. Activate the jobs4youth.org domain and email mailboxes
 2. Connect a real domain
 3. Confirm privacy and terms pages with your legal/privacy lead
 4. Create at least one admin account

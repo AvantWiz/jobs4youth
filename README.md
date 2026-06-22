@@ -1,6 +1,6 @@
-# Jobs4Youth Hub – Real Platform Starter Kit
+# Jobs4Youth Hub – Deployable Web Platform
 
-This starter kit converts the browser-only MVP into a **real web platform** architecture using:
+Jobs4Youth Hub is a deployable web platform for youth opportunities, training, applications, employer workflows and admin verification.
 
 - **Frontend:** HTML/CSS/JavaScript (easy next step from your current MVP)
 - **Backend/Data/Auth:** **Supabase** (Auth + Postgres + Row Level Security + Storage)
@@ -8,13 +8,13 @@ This starter kit converts the browser-only MVP into a **real web platform** arch
 
 ## What is included
 
-1. `index.html` – upgraded frontend shell prepared for live data connection
-2. `app.js` – app logic with placeholders for Supabase wiring
+1. `index.html` – production-ready frontend shell
+2. `app.js` – live Supabase app logic
 3. `styles.css` – extracted and cleaned styling
 4. `supabase_schema.sql` – database schema for users, profiles, opportunities, courses, applications
 5. `supabase_policies.sql` – Row Level Security policies
-6. `seed_data.sql` – starter seed data for demo
-7. `config.template.js` – where to paste Supabase URL and anon key
+6. `seed_data.sql` – initial verified seed data
+7. `config.js` – Supabase URL and anon public key
 8. `implementation_roadmap.md` – practical phased roadmap from MVP to production
 
 ## Immediate setup steps
@@ -77,7 +77,7 @@ Upload the folder to:
 - Career pathways
 
 ## Important note
-This starter kit is **real and deployable as a foundation**, but you still need your **Supabase anon key** and final deployment choice to make it fully live.
+This frontend uses the Supabase anon public key, which is safe for browser use when Row Level Security policies are enabled. Never place the Supabase service role key in frontend code.
 
 ## Jobs4Youth immediate next goal
-Build the first live version with self-service sign-up, profile onboarding, opportunity posting, applications, and deployment on Vercel.
+Deploy the first live version with self-service sign-up, profile onboarding, opportunity posting, applications, verification and employer candidate management.

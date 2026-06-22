@@ -843,10 +843,10 @@ function contact() {
       <li>Partnership and collaboration inquiries</li>
       <li>General questions and user feedback</li>
     </ul>
-    <h4>Suggested contact details</h4>
+    <h4>Contact details</h4>
     <p><b>Email:</b> info@jobs4youth.org</p>
     <p><b>Support:</b> support@jobs4youth.org</p>
-    <p class="label">You can replace these placeholder contact addresses with your organisation’s official support email addresses before public launch.</p>
+    <p><b>Partnerships:</b> partnerships@jobs4youth.org</p>
     <h4>Response approach</h4>
     <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
   `);
