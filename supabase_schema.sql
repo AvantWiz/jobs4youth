@@ -62,6 +62,18 @@ create table if not exists public.applications (
   unique(opportunity_id, applicant_id)
 );
 
+
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references public.profiles(id) on delete set null,
+  action text not null,
+  entity_type text not null,
+  entity_id uuid,
+  details text,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.verification_queue (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid references public.profiles(id) on delete cascade,
@@ -84,3 +96,6 @@ create unique index if not exists idx_verification_profile_type_pending_org
 create unique index if not exists idx_verification_profile_type_item
   on public.verification_queue(profile_id, item_type, item_id)
   where item_id is not null;
+
+create index if not exists idx_audit_logs_created_at on public.audit_logs(created_at);
+create index if not exists idx_audit_logs_actor on public.audit_logs(actor_id);

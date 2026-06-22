@@ -5,6 +5,7 @@ alter table public.opportunities enable row level security;
 alter table public.courses enable row level security;
 alter table public.applications enable row level security;
 alter table public.verification_queue enable row level security;
+alter table public.audit_logs enable row level security;
 
 -- Clean old policies if rerunning
 
@@ -33,6 +34,9 @@ do $$ begin
   drop policy if exists "Users can view own verification items" on public.verification_queue;
   drop policy if exists "Admins can view verification queue" on public.verification_queue;
   drop policy if exists "Admins can update verification queue" on public.verification_queue;
+
+  drop policy if exists "Users can insert audit logs" on public.audit_logs;
+  drop policy if exists "Admins can view audit logs" on public.audit_logs;
 exception when undefined_object then null; end $$;
 
 -- Profiles
@@ -147,6 +151,18 @@ for select using (
 
 create policy "Admins can update verification queue" on public.verification_queue
 for update using (
+  exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  )
+);
+
+
+-- Audit logs
+create policy "Users can insert audit logs" on public.audit_logs
+for insert with check (auth.uid() = actor_id);
+
+create policy "Admins can view audit logs" on public.audit_logs
+for select using (
   exists (
     select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
   )
