@@ -15,18 +15,22 @@ do $$ begin
   drop policy if exists "Admins can update all profiles" on public.profiles;
 
   drop policy if exists "Anyone can view verified opportunities" on public.opportunities;
+  drop policy if exists "Admins can view all opportunities" on public.opportunities;
   drop policy if exists "Employers can insert opportunities" on public.opportunities;
   drop policy if exists "Poster or admin can update opportunities" on public.opportunities;
 
   drop policy if exists "Anyone can view verified courses" on public.courses;
+  drop policy if exists "Admins can view all courses" on public.courses;
   drop policy if exists "Institutions can insert courses" on public.courses;
   drop policy if exists "Poster or admin can update courses" on public.courses;
 
   drop policy if exists "Users can view own applications" on public.applications;
   drop policy if exists "Youth can insert own applications" on public.applications;
   drop policy if exists "Applicant can update own applications" on public.applications;
+  drop policy if exists "Employers can update applications to own opportunities" on public.applications;
 
   drop policy if exists "Users can insert own verification items" on public.verification_queue;
+  drop policy if exists "Users can view own verification items" on public.verification_queue;
   drop policy if exists "Admins can view verification queue" on public.verification_queue;
   drop policy if exists "Admins can update verification queue" on public.verification_queue;
 exception when undefined_object then null; end $$;
@@ -52,6 +56,13 @@ for update using (
 create policy "Anyone can view verified opportunities" on public.opportunities
 for select using (status = 'Verified' or auth.uid() = posted_by);
 
+create policy "Admins can view all opportunities" on public.opportunities
+for select using (
+  exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  )
+);
+
 create policy "Employers can insert opportunities" on public.opportunities
 for insert with check (
   auth.uid() = posted_by and exists (
@@ -69,6 +80,13 @@ for update using (
 -- Courses
 create policy "Anyone can view verified courses" on public.courses
 for select using (status = 'Verified' or auth.uid() = posted_by);
+
+create policy "Admins can view all courses" on public.courses
+for select using (
+  exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  )
+);
 
 create policy "Institutions can insert courses" on public.courses
 for insert with check (
@@ -102,6 +120,13 @@ for insert with check (
 create policy "Applicant can update own applications" on public.applications
 for update using (auth.uid() = applicant_id);
 
+create policy "Employers can update applications to own opportunities" on public.applications
+for update using (
+  exists (
+    select 1 from public.opportunities o where o.id = opportunity_id and o.posted_by = auth.uid()
+  )
+);
+
 -- Verification queue
 create policy "Users can insert own verification items" on public.verification_queue
 for insert with check (
@@ -109,6 +134,9 @@ for insert with check (
     select 1 from public.profiles p where p.id = auth.uid() and p.role in ('employer','institution','admin')
   )
 );
+
+create policy "Users can view own verification items" on public.verification_queue
+for select using (auth.uid() = profile_id);
 
 create policy "Admins can view verification queue" on public.verification_queue
 for select using (

@@ -33,7 +33,7 @@ create table if not exists public.opportunities (
   education_requirement text,
   experience_requirement text,
   description text,
-  status text check (status in ('Pending','Verified','Closed')) default 'Pending',
+  status text check (status in ('Pending','Verified','Rejected','Closed')) default 'Pending',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -48,7 +48,7 @@ create table if not exists public.courses (
   skills_covered text,
   country text,
   region text,
-  status text check (status in ('Pending','Verified')) default 'Pending',
+  status text check (status in ('Pending','Verified','Rejected')) default 'Pending',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -78,3 +78,9 @@ create index if not exists idx_profiles_role on public.profiles(role);
 create index if not exists idx_opportunities_country on public.opportunities(country);
 create index if not exists idx_opportunities_type on public.opportunities(opportunity_type);
 create index if not exists idx_applications_applicant on public.applications(applicant_id);
+create unique index if not exists idx_verification_profile_type_pending_org
+  on public.verification_queue(profile_id, item_type)
+  where item_id is null;
+create unique index if not exists idx_verification_profile_type_item
+  on public.verification_queue(profile_id, item_type, item_id)
+  where item_id is not null;

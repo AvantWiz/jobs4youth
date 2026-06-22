@@ -235,6 +235,27 @@ async function loadCoursesFromSupabase() {
   }));
 }
 
+async function loadEmployersFromSupabase() {
+  state.employers = [];
+  if (!isConfigured) return;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, organization_name, role, country, region, sector, verified')
+    .in('role', ['employer', 'institution'])
+    .eq('verified', true)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('Error loading verified organisations:', error); return; }
+  state.employers = (data || []).map(org => ({
+    id: org.id,
+    name: org.organization_name || org.full_name || 'Verified organisation',
+    role: org.role,
+    country: org.country || '',
+    region: org.region || '',
+    sector: org.sector || '',
+    verified: !!org.verified
+  }));
+}
+
 async function loadApplicationsFromSupabase() {
   state.applications = [];
   state.employerCandidates = [];
@@ -351,6 +372,7 @@ function metrics() {
 
 function jobCard(j, action) {
   const score = matchScore(j);
+  const alreadyApplied = state.applications.includes(j.id);
   return `
     <div class="job">
       <div>
@@ -358,7 +380,7 @@ function jobCard(j, action) {
         <p><b>${escapeHtml(j.org)}</b> • ${escapeHtml(j.region)}, ${escapeHtml(j.country)} • ${escapeHtml(j.type)} • ${escapeHtml(j.experience)}</p>
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}<span class="pill">${escapeHtml(j.status || 'Pending')}</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? (alreadyApplied ? `<button class="secondary" disabled>Application submitted</button>` : `<button class="primary" onclick="applyJob('${j.id}')">Apply now</button>`) : ''}<span class="pill">${escapeHtml(j.status || 'Pending')}</span></div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -554,10 +576,24 @@ window.submitOpportunity = async function() {
 function candidates() {
   return `
     <div class="card"><div class="section-title"><h3>Candidate applications</h3><button class="secondary" onclick="setView('post opportunity')">Post another opportunity</button></div>${state.employerCandidates.length ? state.employerCandidates.map(c => `
-      <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
+      <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="secondary" onclick="updateApplicationStatus('${c.id}','Shortlisted')">Shortlist</button><button class="secondary" onclick="updateApplicationStatus('${c.id}','Rejected')">Reject</button><button class="primary" onclick="updateApplicationStatus('${c.id}','Placed')">Mark placed</button></div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
     `).join('') : '<p class="label">No applications received yet for your opportunities.</p>'}</div>
   `;
 }
+
+window.updateApplicationStatus = async function(applicationId, status) {
+  if (!isConfigured || !currentUser) return alert('Please sign in first.');
+  const allowed = ['Shortlisted', 'Rejected', 'Placed'];
+  if (!allowed.includes(status)) return alert('Invalid application status.');
+  const { error } = await supabase
+    .from('applications')
+    .update({ application_status: status })
+    .eq('id', applicationId);
+  if (error) return alert(`❌ Failed to update application: ${error.message}`);
+  await loadApplicationsFromSupabase();
+  alert(`✅ Application marked as ${status}.`);
+  render();
+};
 
 function institutionDash() {
   const myCourses = currentUser ? state.courses.filter(c => c.postedBy === currentUser.id) : [];
@@ -682,13 +718,13 @@ window.reviewVerification = async function(queueId, decision) {
   }
   if (item.itemType === 'opportunity' && item.itemId) {
     const updates = { updated_at: new Date().toISOString() };
-    if (approved) updates.status = 'Verified';
+    updates.status = approved ? 'Verified' : 'Rejected';
     const { error } = await supabase.from('opportunities').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update opportunity: ${error.message}`; return; }
   }
   if (item.itemType === 'course' && item.itemId) {
     const updates = { updated_at: new Date().toISOString() };
-    if (approved) updates.status = 'Verified';
+    updates.status = approved ? 'Verified' : 'Rejected';
     const { error } = await supabase.from('courses').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update course: ${error.message}`; return; }
   }
@@ -886,6 +922,10 @@ async function handleAuthSubmit() {
   }
 
   currentUser = authResult.data.user || authResult.data.session?.user || null;
+  if (authMode === 'signup' && !authResult.data.session) {
+    msg.textContent = 'Account created. Please check your email to confirm your account, then sign in.';
+    return;
+  }
   if (currentUser) {
     let profile = await ensureProfile(currentUser);
     if (profile && authMode === 'signup') {
@@ -898,11 +938,23 @@ async function handleAuthSubmit() {
   }
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
+  await loadEmployersFromSupabase();
   await loadApplicationsFromSupabase();
   await loadVerificationQueueFromSupabase();
   closeAuthModal();
   state.view = 'dashboard';
   render();
+}
+
+async function handlePasswordReset() {
+  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
+  const email = document.getElementById('authEmail').value.trim();
+  const msg = document.getElementById('authMessage');
+  msg.textContent = '';
+  if (!email) { msg.textContent = 'Enter your email first, then click reset password.'; return; }
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  if (error) { msg.textContent = error.message; return; }
+  msg.textContent = 'Password reset email sent. Check your inbox.';
 }
 
 async function signOut() {
@@ -953,6 +1005,8 @@ window.saveOrganizationProfile = async function () {
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) return alert(`❌ Failed to save organisation profile: ${error.message}`);
   state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
+  await ensureVerificationRequest({ id: user.id }, state.role);
+  await loadEmployersFromSupabase();
   alert('✅ Organisation profile saved successfully!');
   render();
 };
@@ -969,6 +1023,7 @@ async function initializeApp() {
     }
     await loadJobsFromSupabase();
     await loadCoursesFromSupabase();
+    await loadEmployersFromSupabase();
     await loadApplicationsFromSupabase();
     await loadVerificationQueueFromSupabase();
     supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -983,6 +1038,7 @@ async function initializeApp() {
       }
       await loadJobsFromSupabase();
       await loadCoursesFromSupabase();
+      await loadEmployersFromSupabase();
       await loadApplicationsFromSupabase();
       await loadVerificationQueueFromSupabase();
       render();
@@ -995,6 +1051,7 @@ document.getElementById('btnSignIn').addEventListener('click', demoSignIn);
 document.getElementById('btnSignOut').addEventListener('click', signOut);
 document.getElementById('closeAuthModal').addEventListener('click', closeAuthModal);
 document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSubmit);
+document.getElementById('btnResetPassword').addEventListener('click', handlePasswordReset);
 document.getElementById('tabLogin').addEventListener('click', () => { authMode = 'login'; updateAuthModal(); });
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
 
