@@ -14,7 +14,7 @@ const OPTION_SETS = {
   courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp']
 };
 
-const initialState = {
+const demoState = {
   role: 'youth',
   view: 'dashboard',
   profile: {
@@ -35,17 +35,14 @@ const initialState = {
   employers: [],
   applications: [],
   employerCandidates: [],
-  verificationItems: [],
-  auditLogs: []
+  verificationItems: []
 };
 
-let state = structuredClone(initialState);
+let state = structuredClone(demoState);
 let supabase = null;
 let isConfigured = false;
 let currentUser = null;
 let authMode = 'login';
-window.J4Y_BUILD = 'render-fix-2026-06-22-v1';
-console.log('Jobs4Youth build:', window.J4Y_BUILD);
 
 if (
   window.JOBS4YOUTH_CONFIG &&
@@ -66,84 +63,53 @@ function title(s) {
 }
 
 function words(s) {
-  return (s || '').toLowerCase().split(/[\s,;./()\-]+/).filter(Boolean);
+  return (s || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
 }
 
-function uniqueWords(value) {
-  return [...new Set(words(value).filter(w => w.length > 2))];
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function overlap(a, b) {
-  const bSet = new Set(uniqueWords(b));
-  return uniqueWords(a).filter(w => bSet.has(w));
-}
-
-function scorePart(matches, total, weight) {
-  if (!total) return 0;
-  return Math.min(weight, Math.round((matches / total) * weight));
-}
-
-function matchDetails(job) {
-  const skillHits = overlap(state.profile.skills, job.skills);
-  const interestHits = overlap(state.profile.interests, [job.title, job.desc, job.type, job.skills].join(' '));
-  const jobSkillCount = Math.max(uniqueWords(job.skills).length, 1);
-  let score = 25;
-  score += scorePart(skillHits.length, jobSkillCount, 35);
-  score += scorePart(interestHits.length, Math.max(uniqueWords(state.profile.interests).length, 1), 18);
-  if ((job.country || '') && job.country === state.profile.country) score += 10;
-  if ((job.region || '') && job.region === state.profile.region) score += 8;
-  if ((job.education || '') && job.education === state.profile.education) score += 8;
-  if ((job.experience || '') && job.experience === state.profile.experience) score += 6;
-  const reasons = [];
-  if (skillHits.length) reasons.push('Skills match: ' + skillHits.slice(0, 4).join(', '));
-  if (interestHits.length) reasons.push('Interest match: ' + interestHits.slice(0, 3).join(', '));
-  if ((job.country || '') === state.profile.country) reasons.push('Country match');
-  if ((job.region || '') === state.profile.region) reasons.push('Location match');
-  if ((job.education || '') === state.profile.education) reasons.push('Education match');
-  if (!reasons.length) reasons.push('General profile fit based on opportunity details');
-  return { score: Math.min(98, score), reasons };
+function renderOptions(options, selected = '', placeholder = 'Select') {
+  const first = `<option value="">${escapeHtml(placeholder)}</option>`;
+  const items = options.map(opt => `<option value="${escapeHtml(opt)}" ${selected === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('');
+  return first + items;
 }
 
 function matchScore(job) {
-  return matchDetails(job).score;
-}
-
-function skillCountsFromJobs() {
-  const counts = {};
-  state.jobs.forEach(job => {
-    (job.skills || '').split(',').map(x => x.trim()).filter(Boolean).forEach(skill => {
-      counts[skill] = (counts[skill] || 0) + 1;
-    });
-  });
-  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-}
-
-function courseSkillSet() {
-  const skills = new Set();
-  state.courses.forEach(course => {
-    (course.skills || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean).forEach(skill => skills.add(skill));
-  });
-  return skills;
-}
-
-function trainingGapItems() {
-  const covered = courseSkillSet();
-  return skillCountsFromJobs().filter(([skill]) => !covered.has(skill.toLowerCase())).slice(0, 6);
-}
-
-function careerPathways() {
-  const ranked = [...state.jobs].sort((a, b) => matchScore(b) - matchScore(a)).slice(0, 3);
-  return ranked.map(job => {
-    const matchedCourses = state.courses.filter(course => overlap(course.skills, job.skills).length > 0).slice(0, 2);
-    return { job, matchedCourses };
-  });
+  const ps = new Set(words([
+    state.profile.skills,
+    state.profile.interests,
+    state.profile.region,
+    state.profile.country,
+    state.profile.education
+  ].join(' ')));
+  const js = words([
+    job.skills,
+    job.region,
+    job.country,
+    job.type,
+    job.experience,
+    job.education
+  ].join(' '));
+  let hit = 0;
+  js.forEach(w => { if (ps.has(w)) hit += 1; });
+  let base = Math.round((hit / Math.max(js.length, 1)) * 70) + 20;
+  if ((job.region || '') === (state.profile.region || '')) base += 10;
+  if ((job.country || '') === (state.profile.country || '')) base += 6;
+  return Math.min(98, base);
 }
 
 function navItems() {
   if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'audit logs', 'insights', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'about', 'privacy', 'terms', 'contact'];
 }
 
 function desc() {
@@ -157,34 +123,16 @@ function desc() {
   return 'Verify partners, monitor activity and generate labour market intelligence.';
 }
 
-async function loadDataForView(v = state.view) {
-  if (!isConfigured) return;
-  if (['dashboard', 'opportunities', 'training', 'courses', 'insights'].includes(v)) {
-    await loadJobsFromSupabase();
-    await loadCoursesFromSupabase();
-    await loadEmployersFromSupabase();
-  }
-  if (['dashboard', 'candidates', 'opportunities'].includes(v)) {
-    await loadApplicationsFromSupabase();
-  }
-  if (state.role === 'admin' && ['dashboard', 'verification'].includes(v)) {
-    await loadVerificationQueueFromSupabase();
-  }
-  if (state.role === 'admin' && ['dashboard', 'audit logs'].includes(v)) {
-    await loadAuditLogsFromSupabase();
-  }
-}
-
-async function setView(v) {
+function setView(v) {
   state.view = v;
-  await loadDataForView(v);
   render();
 }
 
-async function setRole(r) {
+function setRole(r) {
   if (currentUser) return;
   state.role = r;
-  await setView('dashboard');
+  state.view = r === 'admin' ? 'dashboard' : 'about';
+  render();
 }
 
 window.setView = setView;
@@ -287,27 +235,6 @@ async function loadCoursesFromSupabase() {
   }));
 }
 
-async function loadEmployersFromSupabase() {
-  state.employers = [];
-  if (!isConfigured) return;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, organization_name, role, country, region, sector, verified')
-    .in('role', ['employer', 'institution'])
-    .eq('verified', true)
-    .order('created_at', { ascending: false });
-  if (error) { console.error('Error loading verified organisations:', error); return; }
-  state.employers = (data || []).map(org => ({
-    id: org.id,
-    name: org.organization_name || org.full_name || 'Verified organisation',
-    role: org.role,
-    country: org.country || '',
-    region: org.region || '',
-    sector: org.sector || '',
-    verified: !!org.verified
-  }));
-}
-
 async function loadApplicationsFromSupabase() {
   state.applications = [];
   state.employerCandidates = [];
@@ -399,59 +326,16 @@ async function loadVerificationQueueFromSupabase() {
   }));
 }
 
-
-async function loadAuditLogsFromSupabase() {
-  state.auditLogs = [];
-  if (!isConfigured || !currentUser || state.role !== 'admin') return;
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(80);
-  if (error) { console.error('Error loading audit logs:', error); return; }
-  state.auditLogs = data || [];
-}
-
-async function writeAuditLog(action, entityType, entityId = null, details = '') {
-  if (!isConfigured || !currentUser) return;
-  const { error } = await supabase.from('audit_logs').insert([{
-    actor_id: currentUser.id,
-    action,
-    entity_type: entityType,
-    entity_id: entityId,
-    details
-  }]);
-  if (error) console.error('Audit log error:', error);
-}
-
 function renderShell() {
-  const navEl = document.getElementById('nav');
-  const roleEl = document.getElementById('roleSwitch');
-  const signInBtn = document.getElementById('btnSignIn');
-  const signOutBtn = document.getElementById('btnSignOut');
-  const authStatus = document.getElementById('authStatus');
-
-  navEl.innerHTML = navItems().map(v => `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}</button>`).join('');
+  document.getElementById('nav').innerHTML = navItems().map(v => `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}</button>`).join('');
   const roles = currentUser ? [state.role] : ['youth', 'employer', 'institution', 'admin'];
-  roleEl.innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
-
-  document.getElementById('kicker').textContent = 'Platform workspace';
+  document.getElementById('roleSwitch').innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
+  document.getElementById('kicker').textContent = isConfigured ? 'Connected workspace' : 'Starter workspace';
   document.getElementById('pageTitle').textContent = title(state.view);
   document.getElementById('pageDesc').textContent = desc();
-
-  if (currentUser) {
-    signInBtn.style.display = 'none';
-    signInBtn.disabled = true;
-    signOutBtn.style.display = 'inline-flex';
-    signOutBtn.disabled = false;
-    authStatus.textContent = '';
-  } else {
-    signInBtn.style.display = 'inline-flex';
-    signInBtn.disabled = false;
-    signOutBtn.style.display = 'none';
-    signOutBtn.disabled = true;
-    authStatus.textContent = '';
-  }
+  if (!isConfigured) document.getElementById('authStatus').textContent = 'Add config.js to go live';
+  else if (currentUser) document.getElementById('authStatus').textContent = `Signed in: ${currentUser.email}`;
+  else document.getElementById('authStatus').textContent = 'Supabase configured';
 }
 
 function metrics() {
@@ -466,9 +350,7 @@ function metrics() {
 }
 
 function jobCard(j, action) {
-  const details = matchDetails(j);
-  const score = details.score;
-  const alreadyApplied = state.applications.includes(j.id);
+  const score = matchScore(j);
   return `
     <div class="job">
       <div>
@@ -476,8 +358,7 @@ function jobCard(j, action) {
         <p><b>${escapeHtml(j.org)}</b> • ${escapeHtml(j.region)}, ${escapeHtml(j.country)} • ${escapeHtml(j.type)} • ${escapeHtml(j.experience)}</p>
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
-        <p class="label" style="margin-top:8px;"><b>Match basis:</b> ${details.reasons.map(escapeHtml).join(' • ')}</p>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? (alreadyApplied ? `<button class="secondary" disabled>Application submitted</button>` : `<button class="primary" onclick="applyJob('${j.id}')">Apply now</button>`) : ''}<span class="pill">${escapeHtml(j.status || 'Pending')}</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}<span class="pill">${escapeHtml(j.status || 'Pending')}</span></div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -497,7 +378,6 @@ window.applyJob = async function(id) {
     if ((error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') return alert('You have already applied for this opportunity.');
     return alert(`Failed to apply: ${error.message}`);
   }
-  await writeAuditLog('application_submitted', 'opportunity', id, 'Youth submitted an application');
   await loadApplicationsFromSupabase();
   alert('✅ Application saved successfully!');
   render();
@@ -527,6 +407,7 @@ function trustPageShell(kicker, heading, bodyHtml) {
 function youthDash() {
   const ranked = [...state.jobs].sort((a, b) => matchScore(b) - matchScore(a));
   return `
+    <div class="notice"><b>Professional upgrade:</b> structured drop-down fields and public trust pages have been added for a more professional public-facing platform.</div>
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-8">
@@ -534,8 +415,8 @@ function youthDash() {
         ${ranked.slice(0, 3).map(j => jobCard(j, true)).join('') || '<p class="label">No verified opportunities yet.</p>'}
       </div>
       <div class="card span-4">
-        <h3>Recommended career pathways</h3>
-        ${careerPathwayPanel()}
+        <h3>Recommended skills pathway</h3>
+        ${(state.courses.length ? state.courses : []).slice(0,4).map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)}</span></p>`).join('') || '<p class="label">No verified training offers yet.</p>'}
       </div>
     </div>
   `;
@@ -616,7 +497,7 @@ function employerDash() {
 function postOpportunity() {
   return `
     <div class="card">
-      <div class="section-title"><h3>Post a new opportunity</h3><span class="pill">Verification required</span></div>
+      <div class="section-title"><h3>Post a new opportunity</h3><span class="pill">Professional form</span></div>
       <p class="label">New opportunity posts are saved with status <b>Pending</b> until admin review.</p>
       <div class="form" style="margin-top:14px">
         <label class="full">Opportunity title<input id="oppTitle" placeholder="e.g. Agribusiness Internship Officer" /></label>
@@ -665,7 +546,6 @@ window.submitOpportunity = async function() {
   if (error) { console.error('Opportunity insert error:', error); if (msg) msg.textContent = `Failed to post opportunity: ${error.message}`; return; }
   const { error: queueError } = await supabase.from('verification_queue').insert([{ profile_id: user.id, item_type: 'opportunity', item_id: inserted.id, review_status: 'Pending' }]);
   if (queueError) console.error('Verification queue insert error:', queueError);
-  await writeAuditLog('opportunity_posted', 'opportunity', inserted.id, 'Opportunity submitted for verification');
   await loadJobsFromSupabase();
   alert('✅ Opportunity posted successfully! It is now pending admin verification.');
   setView('dashboard');
@@ -674,25 +554,10 @@ window.submitOpportunity = async function() {
 function candidates() {
   return `
     <div class="card"><div class="section-title"><h3>Candidate applications</h3><button class="secondary" onclick="setView('post opportunity')">Post another opportunity</button></div>${state.employerCandidates.length ? state.employerCandidates.map(c => `
-      <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="secondary" onclick="updateApplicationStatus('${c.id}','Shortlisted')">Shortlist</button><button class="secondary" onclick="updateApplicationStatus('${c.id}','Rejected')">Reject</button><button class="primary" onclick="updateApplicationStatus('${c.id}','Placed')">Mark placed</button></div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
+      <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
     `).join('') : '<p class="label">No applications received yet for your opportunities.</p>'}</div>
   `;
 }
-
-window.updateApplicationStatus = async function(applicationId, status) {
-  if (!isConfigured || !currentUser) return alert('Please sign in first.');
-  const allowed = ['Shortlisted', 'Rejected', 'Placed'];
-  if (!allowed.includes(status)) return alert('Invalid application status.');
-  const { error } = await supabase
-    .from('applications')
-    .update({ application_status: status })
-    .eq('id', applicationId);
-  if (error) return alert(`❌ Failed to update application: ${error.message}`);
-  await writeAuditLog('application_status_updated', 'application', applicationId, 'Application marked as ' + status);
-  await loadApplicationsFromSupabase();
-  alert(`✅ Application marked as ${status}.`);
-  render();
-};
 
 function institutionDash() {
   const myCourses = currentUser ? state.courses.filter(c => c.postedBy === currentUser.id) : [];
@@ -700,7 +565,7 @@ function institutionDash() {
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-6"><div class="section-title"><h3>Your training catalogue</h3><button class="secondary" onclick="setView('post training')">Post training</button></div>${myCourses.length ? myCourses.map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)} • ${escapeHtml(c.region)}, ${escapeHtml(c.country)}</span><br><span class="pill">${escapeHtml(c.status)}</span></p>`).join('') : '<p class="label">No courses posted yet.</p>'}</div>
-      <div class="card span-6"><h3>Demand signals</h3>${skillsDemandBars()}</div>
+      <div class="card span-6"><h3>Demand signals</h3>${bar('Food safety', 92)}${bar('Record keeping', 78)}${bar('Mechanization', 61)}${bar('Quality control', 57)}</div>
     </div>
   `;
 }
@@ -708,7 +573,7 @@ function institutionDash() {
 function postTraining() {
   return `
     <div class="card">
-      <div class="section-title"><h3>Post training course</h3><span class="pill">Verification required</span></div>
+      <div class="section-title"><h3>Post training course</h3><span class="pill">Professional form</span></div>
       <p class="label">New courses are saved with status <b>Pending</b> until admin review.</p>
       <div class="form" style="margin-top:14px">
         <label class="full">Course title<input id="courseTitle" placeholder="e.g. Digital Farm Records for Youth" /></label>
@@ -751,7 +616,6 @@ window.submitCourse = async function() {
   if (error) { console.error('Course insert error:', error); if (msg) msg.textContent = `Failed to post training: ${error.message}`; return; }
   const { error: queueError } = await supabase.from('verification_queue').insert([{ profile_id: user.id, item_type: 'course', item_id: inserted.id, review_status: 'Pending' }]);
   if (queueError) console.error('Verification queue insert error:', queueError);
-  await writeAuditLog('course_posted', 'course', inserted.id, 'Training course submitted for verification');
   await loadCoursesFromSupabase();
   alert('✅ Training course posted successfully! It is now pending admin verification.');
   setView('dashboard');
@@ -792,15 +656,9 @@ function adminDash() {
       <div class="card span-4"><div class="label">Approved items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Approved').length}</div></div>
       <div class="card span-4"><div class="label">Rejected items</div><div class="metric">${state.verificationItems.filter(i => i.reviewStatus === 'Rejected').length}</div></div>
     </div>
-    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="openVerificationQueue()">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place.</p></div><div class="card span-5"><h3>Platform governance</h3><p class="label">Verified partners, moderated opportunities, reviewed training providers and accountable admin decisions.</p></div></div>
+    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place.</p></div><div class="card span-5"><h3>Professional launch checklist</h3><p class="label">• custom domain<br>• legal pages<br>• structured forms<br>• visible verification badges</p></div></div>
   `;
 }
-
-window.openVerificationQueue = async function() {
-  state.view = 'verification';
-  await loadVerificationQueueFromSupabase();
-  render();
-};
 
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
@@ -824,13 +682,13 @@ window.reviewVerification = async function(queueId, decision) {
   }
   if (item.itemType === 'opportunity' && item.itemId) {
     const updates = { updated_at: new Date().toISOString() };
-    updates.status = approved ? 'Verified' : 'Rejected';
+    if (approved) updates.status = 'Verified';
     const { error } = await supabase.from('opportunities').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update opportunity: ${error.message}`; return; }
   }
   if (item.itemType === 'course' && item.itemId) {
     const updates = { updated_at: new Date().toISOString() };
-    updates.status = approved ? 'Verified' : 'Rejected';
+    if (approved) updates.status = 'Verified';
     const { error } = await supabase.from('courses').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update course: ${error.message}`; return; }
   }
@@ -838,54 +696,13 @@ window.reviewVerification = async function(queueId, decision) {
   if (queueError) { if (msg) msg.textContent = `Failed to update verification queue: ${queueError.message}`; return; }
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
-  await writeAuditLog('verification_' + decision.toLowerCase(), item.itemType, item.itemId || item.profileId, note);
   await loadVerificationQueueFromSupabase();
-  await loadAuditLogsFromSupabase();
   alert(`✅ ${decision} successfully.`);
   render();
 };
 
-
-function auditLogs() {
-  return `
-    <div class="grid">
-      <div class="card span-12">
-        <div class="section-title"><h3>Audit logs</h3><button class="secondary" onclick="refreshAuditLogs()">Refresh logs</button></div>
-        ${state.auditLogs.length ? state.auditLogs.map(log => `<div class="job"><div><h3>${escapeHtml(log.action || 'Activity')}</h3><p><b>${escapeHtml(log.entity_type || '')}</b>${log.entity_id ? ' • ' + escapeHtml(log.entity_id) : ''}</p><p class="label">${escapeHtml(log.details || '')}</p><p class="label">${escapeHtml(new Date(log.created_at).toLocaleString())}</p></div><div class="fit" style="--score:100"><span>Log</span></div></div>`).join('') : '<p class="label">No audit activity has been recorded yet.</p>'}
-      </div>
-    </div>
-  `;
-}
-
-window.refreshAuditLogs = async function() { await loadAuditLogsFromSupabase(); render(); };
-
-function skillsDemandBars() {
-  const topSkills = skillCountsFromJobs().slice(0, 6);
-  if (!topSkills.length) return '<p class="label">Demand signals will appear as verified opportunities are published.</p>';
-  const maxCount = Math.max(...topSkills.map(([, count]) => count), 1);
-  return topSkills.map(([skill, count]) => bar(skill, Math.max(18, Math.round((count / maxCount) * 100)))).join('');
-}
-
-function trainingGapPanel() {
-  const gaps = trainingGapItems();
-  if (!gaps.length) return '<p class="label">Current training catalogue covers the main skills requested by verified opportunities.</p>';
-  return gaps.map(([skill, count]) => `<p><b>${escapeHtml(skill)}</b><br><span class="label">Requested in ${count} verified opportunity${count === 1 ? '' : 'ies'} with limited matching training coverage.</span></p>`).join('');
-}
-
-function careerPathwayPanel() {
-  const pathways = careerPathways();
-  if (!pathways.length) return '<p class="label">Career pathways will appear when opportunities and training offers are available.</p>';
-  return pathways.map(item => `<p><b>${escapeHtml(item.job.title)}</b><br><span class="label">${item.matchedCourses.length ? 'Relevant training: ' + item.matchedCourses.map(c => escapeHtml(c.title)).join(', ') : 'Build skills in: ' + escapeHtml(item.job.skills || 'core role requirements')}</span></p>`).join('');
-}
-
 function insights() {
-  return `
-    <div class="grid">
-      <div class="card span-6"><h3>Skills demand dashboard</h3>${skillsDemandBars()}</div>
-      <div class="card span-6"><h3>Training gap insights</h3>${trainingGapPanel()}</div>
-      <div class="card span-12"><h3>Career pathways</h3>${careerPathwayPanel()}</div>
-    </div>
-  `;
+  return trustPageShell('Insights', 'Skills demand dashboard', `${bar('Food safety', 92)}${bar('Packaging', 78)}${bar('Record keeping', 74)}${bar('Dairy', 63)}${bar('Mechanization', 58)}${bar('Quality control', 57)}`);
 }
 
 function about() {
@@ -912,12 +729,13 @@ function about() {
           <li>Structured user profiles and cleaner data entry through drop-down fields</li>
           <li>Role-based dashboards for youth, employers, institutions and admin users</li>
           <li>Opportunity, training and application management in one place</li>
-          <li>Labour market analytics and youth employment reporting</li>
+          <li>A foundation for labour market analytics and youth employment reporting</li>
         </ul>
       </div>
       <div class="card span-6">
         <h3>Professional standards</h3>
-        <p>Jobs4Youth operates as a professional public service platform with structured forms, verification, responsible moderation, consistent data capture and clear governance.</p>
+        <p>Jobs4Youth is being built as a professional public service platform. That means the platform prioritises structured forms, verification, responsible moderation, consistent data capture and clear governance.</p>
+        <p class="label">Public launch readiness will also include a custom domain, legal pages, support contacts and stronger user guidance.</p>
       </div>
     </div>
   `;
@@ -989,10 +807,10 @@ function contact() {
       <li>Partnership and collaboration inquiries</li>
       <li>General questions and user feedback</li>
     </ul>
-    <h4>Contact details</h4>
+    <h4>Suggested contact details</h4>
     <p><b>Email:</b> info@jobs4youth.org</p>
     <p><b>Support:</b> support@jobs4youth.org</p>
-    <p><b>Partnerships:</b> partnerships@jobs4youth.org</p>
+    <p class="label">You can replace these placeholder contact addresses with your organisation’s official support email addresses before public launch.</p>
     <h4>Response approach</h4>
     <p>The platform team aims to respond to enquiries as promptly as possible, prioritising technical issues and safeguarding concerns.</p>
   `);
@@ -1005,64 +823,16 @@ function bar(label, n) {
 function render() {
   renderShell();
   let c = '';
-
-  switch (state.view) {
-    case 'about':
-      c = about();
-      break;
-    case 'privacy':
-      c = privacy();
-      break;
-    case 'terms':
-      c = terms();
-      break;
-    case 'contact':
-      c = contact();
-      break;
-    default:
-      if (state.role === 'youth') {
-        c = state.view === 'dashboard'
-          ? youthDash()
-          : state.view === 'opportunities'
-          ? opportunities()
-          : state.view === 'training'
-          ? training()
-          : profile();
-      } else if (state.role === 'employer') {
-        c = state.view === 'dashboard'
-          ? employerDash()
-          : state.view === 'post opportunity'
-          ? postOpportunity()
-          : state.view === 'candidates'
-          ? candidates()
-          : profile();
-      } else if (state.role === 'institution') {
-        c = state.view === 'dashboard'
-          ? institutionDash()
-          : state.view === 'post training'
-          ? postTraining()
-          : state.view === 'courses'
-          ? courses()
-          : profile();
-      } else if (state.role === 'admin') {
-        c = state.view === 'dashboard'
-          ? adminDash()
-          : state.view === 'verification'
-          ? verification()
-          : state.view === 'audit logs'
-          ? auditLogs()
-          : state.view === 'insights'
-          ? insights()
-          : about();
-      } else {
-        c = about();
-      }
-      break;
-  }
-
+  if (state.view === 'about') c = about();
+  else if (state.view === 'privacy') c = privacy();
+  else if (state.view === 'terms') c = terms();
+  else if (state.view === 'contact') c = contact();
+  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
+  else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
+  else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
+  else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : contact();
   document.getElementById('content').innerHTML = c;
 }
-
 
 function openAuthModal(mode = 'login') {
   authMode = mode;
@@ -1087,7 +857,7 @@ function updateAuthModal() {
   document.getElementById('authMessage').textContent = '';
 }
 
-function showSignIn() { openAuthModal('login'); }
+function demoSignIn() { openAuthModal('login'); }
 
 async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
@@ -1116,10 +886,6 @@ async function handleAuthSubmit() {
   }
 
   currentUser = authResult.data.user || authResult.data.session?.user || null;
-  if (authMode === 'signup' && !authResult.data.session) {
-    msg.textContent = 'Account created. Please check your email to confirm your account, then sign in.';
-    return;
-  }
   if (currentUser) {
     let profile = await ensureProfile(currentUser);
     if (profile && authMode === 'signup') {
@@ -1132,30 +898,17 @@ async function handleAuthSubmit() {
   }
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
-  await loadEmployersFromSupabase();
   await loadApplicationsFromSupabase();
   await loadVerificationQueueFromSupabase();
-  await loadAuditLogsFromSupabase();
   closeAuthModal();
   state.view = 'dashboard';
   render();
 }
 
-async function handlePasswordReset() {
-  if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
-  const email = document.getElementById('authEmail').value.trim();
-  const msg = document.getElementById('authMessage');
-  msg.textContent = '';
-  if (!email) { msg.textContent = 'Enter your email first, then click reset password.'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-  if (error) { msg.textContent = error.message; return; }
-  msg.textContent = 'Password reset email sent. Check your inbox.';
-}
-
 async function signOut() {
   if (isConfigured && supabase) await supabase.auth.signOut();
   currentUser = null;
-  state = structuredClone(initialState);
+  state = structuredClone(demoState);
   state.view = 'about';
   render();
   alert('Signed out.');
@@ -1180,7 +933,6 @@ window.saveProfile = async function () {
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) return alert(`❌ Failed to save profile: ${error.message}`);
   state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
-  await writeAuditLog('profile_saved', 'profile', user.id, 'Youth profile updated');
   alert('✅ Profile saved successfully!');
   render();
 };
@@ -1201,9 +953,6 @@ window.saveOrganizationProfile = async function () {
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) return alert(`❌ Failed to save organisation profile: ${error.message}`);
   state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
-  await ensureVerificationRequest({ id: user.id }, state.role);
-  await writeAuditLog('organisation_profile_saved', 'profile', user.id, 'Organisation profile updated');
-  await loadEmployersFromSupabase();
   alert('✅ Organisation profile saved successfully!');
   render();
 };
@@ -1220,10 +969,8 @@ async function initializeApp() {
     }
     await loadJobsFromSupabase();
     await loadCoursesFromSupabase();
-    await loadEmployersFromSupabase();
     await loadApplicationsFromSupabase();
     await loadVerificationQueueFromSupabase();
-    await loadAuditLogsFromSupabase();
     supabase.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       if (currentUser) {
@@ -1231,26 +978,23 @@ async function initializeApp() {
         syncProfileToState(profile);
         state.view = 'dashboard';
       } else {
-        state = structuredClone(initialState);
+        state = structuredClone(demoState);
         state.view = 'about';
       }
       await loadJobsFromSupabase();
       await loadCoursesFromSupabase();
-      await loadEmployersFromSupabase();
       await loadApplicationsFromSupabase();
       await loadVerificationQueueFromSupabase();
-      await loadAuditLogsFromSupabase();
       render();
     });
   }
   render();
 }
 
-document.getElementById('btnSignIn').addEventListener('click', showSignIn);
+document.getElementById('btnSignIn').addEventListener('click', demoSignIn);
 document.getElementById('btnSignOut').addEventListener('click', signOut);
 document.getElementById('closeAuthModal').addEventListener('click', closeAuthModal);
 document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSubmit);
-document.getElementById('btnResetPassword').addEventListener('click', handlePasswordReset);
 document.getElementById('tabLogin').addEventListener('click', () => { authMode = 'login'; updateAuthModal(); });
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
 
