@@ -19,14 +19,14 @@ const demoState = {
   role: 'youth',
   view: 'dashboard',
   profile: {
-    name: 'Amina Otieno',
-    country: 'Kenya',
-    region: 'Nakuru',
-    education: 'Diploma',
-    skills: 'food safety, dairy, record keeping, packaging, mobile money',
-    interests: 'agri-processing, dairy, quality control',
-    availability: 'Immediate',
-    experience: 'Entry Level',
+    name: '',
+    country: '',
+    region: '',
+    education: '',
+    skills: '',
+    interests: '',
+    availability: '',
+    experience: '',
     organizationName: '',
     sector: '',
     verified: false
@@ -183,7 +183,7 @@ function notificationCard(item) {
         ${item.emailStatus ? `<span class="pill">Email ${escapeHtml(item.emailStatus)}</span>` : ''}
       </div>
       <div class="hero-actions" style="margin-top:12px;">
-        ${!item.isRead ? `<button class="secondary" onclick="window.markNotificationRead('${escapeHtml(item.id)}')">Mark as read</button>` : ''}
+        ${!item.isRead ? `<button class="secondary" onclick="markNotificationRead('${escapeHtml(item.id)}')">Mark as read</button>` : ''}
       </div>
     </div>
   `;
@@ -205,8 +205,8 @@ function documentReviewCard(doc, adminMode = false) {
       </div>
       ${doc.adminNotes ? `<div class="support-admin-note"><b>Admin note:</b> ${escapeHtml(doc.adminNotes)}</div>` : ''}
       <div class="document-actions">
-        <button class="secondary" onclick="window.openVerificationDocument('${escapeHtml(doc.storagePath)}')">Open document</button>
-        ${adminMode ? `<button class="primary" onclick="window.updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Approved')">Approve document</button><button class="secondary" onclick="window.updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Rejected')">Reject document</button>` : ''}
+        <button class="secondary" onclick="openVerificationDocument('${escapeHtml(doc.storagePath)}')">Open document</button>
+        ${adminMode ? `<button class="primary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Approved')">Approve document</button><button class="secondary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Rejected')">Reject document</button>` : ''}
       </div>
     </div>
   `;
@@ -788,7 +788,7 @@ function jobCard(j, action) {
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="window.applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -1146,7 +1146,7 @@ function youthProfileForm() {
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
       <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
-      <button class="primary full" onclick="window.saveProfile()">Save profile</button>
+      <button class="primary full" onclick="saveProfile()">Save profile</button>
     </div>
   `;
 }
@@ -1185,7 +1185,7 @@ function organizationProfileForm(label) {
         <div class="label" style="margin-top:8px;">${escapeHtml(verificationText)}</div>
       </div>
       ${decisionMessage}
-      <button class="primary full" onclick="window.saveOrganizationProfile()">Save organisation profile</button>
+      <button class="primary full" onclick="saveOrganizationProfile()">Save organisation profile</button>
       <div class="full verification-docs-panel">
         <div class="section-title"><div><h3>Verification documents</h3><p class="label">${escapeHtml(documentUploadGuidance(state.role))}</p></div><span class="pill">Private upload</span></div>
         ${docSummary}
@@ -1201,7 +1201,7 @@ function organizationProfileForm(label) {
           </label>
         </div>
         <div class="hero-actions" style="margin-top:12px;">
-          <button class="primary" onclick="window.uploadVerificationDocument()">Upload verification document</button>
+          <button class="primary" onclick="uploadVerificationDocument()">Upload verification document</button>
         </div>
         <div class="label" id="verificationDocumentMessage" style="margin-top:10px;"></div>
         <div class="document-list" style="margin-top:14px;">
@@ -1256,7 +1256,7 @@ function postOpportunity() {
         ${actionSelect('Experience requirement','oppExperience', OPTION_SETS.experienceLevels, '', 'Choose experience requirement')}
         <label>Required skills (comma separated)<input id="oppSkills" placeholder="e.g. food safety, packaging, record keeping" /></label>
         <label class="full">Description<textarea id="oppDescription" placeholder="Describe responsibilities, duration, location, and who should apply."></textarea></label>
-        <button class="primary full" onclick="window.submitOpportunity()">Post opportunity</button>
+        <button class="primary full" onclick="submitOpportunity()">Post opportunity</button>
         <div class="label full" id="oppMessage"></div>
       </div>
     </div>
@@ -1334,7 +1334,7 @@ function postTraining() {
         ${actionSelect('Country','courseCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
         <label>Region / City<input id="courseRegion" placeholder="e.g. Nairobi / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
         <label class="full">Skills covered (comma separated)<input id="courseSkills" placeholder="e.g. agronomy, records, mobile money" /></label>
-        <button class="primary full" onclick="window.submitCourse()">Post training</button>
+        <button class="primary full" onclick="submitCourse()">Post training</button>
         <div class="label full" id="courseMessage"></div>
       </div>
     </div>
@@ -1400,7 +1400,7 @@ function verificationCard(item) {
         <h3>${escapeHtml(title(item.itemType))} • ${escapeHtml(item.reviewStatus)}</h3>
         ${details}
         ${docSection}
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="window.reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="window.reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
       </div>
       <div class="fit" style="--score:${item.reviewStatus === 'Approved' ? 100 : item.reviewStatus === 'Rejected' ? 30 : 60}"><span>${item.reviewStatus === 'Approved' ? '✓' : item.reviewStatus === 'Rejected' ? '✕' : '…'}</span></div>
     </div>
@@ -1427,7 +1427,7 @@ function adminDash() {
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
   const reviewed = state.verificationItems.filter(i => i.reviewStatus !== 'Pending');
-  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="window.refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
+  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
 }
 
 
@@ -1741,6 +1741,8 @@ function closeAuthModal() {
   document.getElementById('authModal')?.classList.add('hidden');
   document.getElementById('authMessage').textContent = '';
   document.getElementById('authPassword').value = '';
+  const confirmInput = document.getElementById('authConfirmPassword');
+  if (confirmInput) confirmInput.value = '';
 }
 
 function updateAuthModal() {
@@ -1749,6 +1751,8 @@ function updateAuthModal() {
   document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
   document.getElementById('fullNameWrap').style.display = isSignup ? 'block' : 'none';
   document.getElementById('roleWrap').style.display = isSignup ? 'block' : 'none';
+  const confirmWrap = document.getElementById('confirmPasswordWrap');
+  if (confirmWrap) confirmWrap.style.display = isSignup ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', !isSignup);
   document.getElementById('tabSignup').classList.toggle('active', isSignup);
   document.getElementById('authMessage').textContent = '';
@@ -1763,11 +1767,17 @@ async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value.trim();
+  const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
   const fullName = document.getElementById('authFullName').value.trim();
   const role = document.getElementById('authRole').value;
   const msg = document.getElementById('authMessage');
   msg.textContent = '';
   if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
+  if (authMode === 'signup') {
+    if (!fullName) { msg.textContent = 'Please enter your full name.'; return; }
+    if (!confirmPassword) { msg.textContent = 'Please confirm your password.'; return; }
+    if (password !== confirmPassword) { msg.textContent = 'Password and confirm password do not match.'; return; }
+  }
   let authResult;
   try {
     authResult = authMode === 'signup'
@@ -1783,7 +1793,15 @@ async function handleAuthSubmit() {
     msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
     return;
   }
-  currentUser = authResult.data.user || authResult.data.session?.user || null;
+  if (authMode === 'signup' && !authResult.data.session) {
+    currentUser = null;
+    state = structuredClone(demoState);
+    state.view = 'home';
+    render();
+    msg.textContent = 'Account created successfully. Please check your email, verify your address, then sign in.';
+    return;
+  }
+  currentUser = authResult.data.session?.user || authResult.data.user || null;
   if (currentUser) {
     let profile = await ensureProfile(currentUser);
     if (profile && authMode === 'signup') {
@@ -1819,9 +1837,9 @@ async function signOut() {
 
 window.saveProfile = async function () {
   if (!isConfigured) return alert('Supabase not connected');
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (userError || !user) return alert('Please sign in first.');
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const user = sessionData?.session?.user || null;
+  if (sessionError || !user) return alert('Please sign in first. If you have just created your account, verify your email first, then sign in again.');
   const updates = {
     full_name: document.getElementById('profileName')?.value || '',
     country: document.getElementById('profileCountry')?.value || '',
