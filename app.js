@@ -19,14 +19,14 @@ const demoState = {
   role: 'youth',
   view: 'dashboard',
   profile: {
-    name: '',
-    country: '',
-    region: '',
-    education: '',
-    skills: '',
-    interests: '',
-    availability: '',
-    experience: '',
+    name: 'Amina Otieno',
+    country: 'Kenya',
+    region: 'Nakuru',
+    education: 'Diploma',
+    skills: 'food safety, dairy, record keeping, packaging, mobile money',
+    interests: 'agri-processing, dairy, quality control',
+    availability: 'Immediate',
+    experience: 'Entry Level',
     organizationName: '',
     sector: '',
     verified: false
@@ -50,6 +50,9 @@ let browseFilters = {
   jobs: { keyword: '', country: '', region: '', type: '', education: '', experience: '' },
   courses: { keyword: '', country: '', region: '', mode: '' }
 };
+let mobileNavOpen = false;
+let pendingInputFocus = null;
+let filterDebounceTimer = null;
 
 if (
   window.JOBS4YOUTH_CONFIG &&
@@ -122,9 +125,46 @@ function filteredCourses() {
       return true;
     });
 }
+function rememberInputFocus(inputId) {
+  if (!inputId) return;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  pendingInputFocus = {
+    id: inputId,
+    start: typeof input.selectionStart === 'number' ? input.selectionStart : null,
+    end: typeof input.selectionEnd === 'number' ? input.selectionEnd : null
+  };
+}
+
+function restoreInputFocus() {
+  if (!pendingInputFocus) return;
+  const target = pendingInputFocus;
+  pendingInputFocus = null;
+  requestAnimationFrame(() => {
+    const input = document.getElementById(target.id);
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    if (input.setSelectionRange && target.start !== null && target.end !== null) {
+      input.setSelectionRange(target.start, target.end);
+    }
+  });
+}
+
+function scheduleFilterRender(group, field, value, inputId) {
+  browseFilters[group][field] = value;
+  rememberInputFocus(inputId);
+  clearTimeout(filterDebounceTimer);
+  filterDebounceTimer = setTimeout(() => {
+    render();
+  }, 260);
+}
+
 window.setOpportunityFilter = function(field, value) {
   browseFilters.jobs[field] = value;
   render();
+};
+window.setOpportunityTextFilter = function(field, value, inputId) {
+  scheduleFilterRender('jobs', field, value, inputId);
 };
 window.clearOpportunityFilters = function() {
   browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
@@ -133,6 +173,9 @@ window.clearOpportunityFilters = function() {
 window.setCourseFilter = function(field, value) {
   browseFilters.courses[field] = value;
   render();
+};
+window.setCourseTextFilter = function(field, value, inputId) {
+  scheduleFilterRender('courses', field, value, inputId);
 };
 window.clearCourseFilters = function() {
   browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
@@ -433,8 +476,27 @@ function desc() {
 }
 
 
+function syncMobileNavState() {
+  const appShell = document.querySelector('.app');
+  const overlay = document.getElementById('mobileOverlay');
+  if (appShell) appShell.classList.toggle('nav-open', mobileNavOpen);
+  if (overlay) overlay.classList.toggle('hidden', !mobileNavOpen);
+}
+
+window.toggleMobileNav = function(forceOpen) {
+  if (typeof forceOpen === 'boolean') mobileNavOpen = forceOpen;
+  else mobileNavOpen = !mobileNavOpen;
+  syncMobileNavState();
+};
+
+window.closeMobileNav = function() {
+  mobileNavOpen = false;
+  syncMobileNavState();
+};
+
 function setView(v) {
   state.view = v;
+  if (window.innerWidth <= 900) window.closeMobileNav();
   render();
 }
 
@@ -442,6 +504,7 @@ function setRole(r) {
   if (currentUser) return;
   state.role = r;
   state.view = r === 'admin' ? 'dashboard' : 'home';
+  if (window.innerWidth <= 900) window.closeMobileNav();
   render();
 }
 
@@ -1040,22 +1103,22 @@ function opportunities() {
   const controls = `
     <label>
       Keyword
-      <input value="${escapeHtml(f.keyword)}" placeholder="Search title, organisation, skills" oninput="setOpportunityFilter('keyword', this.value)" />
+      <input id="oppKeywordInput" value="${escapeHtml(f.keyword)}" placeholder="Search title, organisation, skills" oninput="window.setOpportunityTextFilter('keyword', this.value, 'oppKeywordInput')" />
     </label>
-    ${actionSelect('Country', 'oppFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="oppFilterCountry"', `<select id="oppFilterCountry" onchange="setOpportunityFilter('country', this.value)"`)}
+    ${actionSelect('Country', 'oppFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="oppFilterCountry"', `<select id="oppFilterCountry" onchange="window.setOpportunityFilter('country', this.value)"`)}
     <label>
       Region / City
-      <input value="${escapeHtml(f.region)}" placeholder="e.g. Nairobi" oninput="setOpportunityFilter('region', this.value)" />
+      <input id="oppRegionInput" value="${escapeHtml(f.region)}" placeholder="e.g. Nairobi" oninput="window.setOpportunityTextFilter('region', this.value, 'oppRegionInput')" />
     </label>
-    ${actionSelect('Opportunity type', 'oppFilterType', OPTION_SETS.opportunityTypes, f.type, 'All opportunity types').replace('<select id="oppFilterType"', `<select id="oppFilterType" onchange="setOpportunityFilter('type', this.value)"`)}
-    ${actionSelect('Education requirement', 'oppFilterEducation', OPTION_SETS.educationLevels, f.education, 'All education levels').replace('<select id="oppFilterEducation"', `<select id="oppFilterEducation" onchange="setOpportunityFilter('education', this.value)"`)}
-    ${actionSelect('Experience requirement', 'oppFilterExperience', OPTION_SETS.experienceLevels, f.experience, 'All experience levels').replace('<select id="oppFilterExperience"', `<select id="oppFilterExperience" onchange="setOpportunityFilter('experience', this.value)"`)}
+    ${actionSelect('Opportunity type', 'oppFilterType', OPTION_SETS.opportunityTypes, f.type, 'All opportunity types').replace('<select id="oppFilterType"', `<select id="oppFilterType" onchange="window.setOpportunityFilter('type', this.value)"`)}
+    ${actionSelect('Education requirement', 'oppFilterEducation', OPTION_SETS.educationLevels, f.education, 'All education levels').replace('<select id="oppFilterEducation"', `<select id="oppFilterEducation" onchange="window.setOpportunityFilter('education', this.value)"`)}
+    ${actionSelect('Experience requirement', 'oppFilterExperience', OPTION_SETS.experienceLevels, f.experience, 'All experience levels').replace('<select id="oppFilterExperience"', `<select id="oppFilterExperience" onchange="window.setOpportunityFilter('experience', this.value)"`)}
   `;
   return `
     <div class="grid">
       <div class="card span-12">
         ${onboardingPanel()}
-        ${filtersPanel('Search the opportunity marketplace', 'Use structured filters to quickly find roles by keyword, country, location, type and requirements.', controls, 'clearOpportunityFilters')}
+        ${filtersPanel('Search the opportunity marketplace', 'Use structured filters to quickly find roles by keyword, country, location, type and requirements. Results update after you pause typing.', controls, 'clearOpportunityFilters')}
         <div class="results-meta">
           <span class="pill pill-verified">${list.length} result${list.length === 1 ? '' : 's'}</span>
           <span class="pill">Verified and visible listings only</span>
@@ -1085,20 +1148,20 @@ function training() {
   const controls = `
     <label>
       Keyword
-      <input value="${escapeHtml(f.keyword)}" placeholder="Search title, provider, skills" oninput="setCourseFilter('keyword', this.value)" />
+      <input id="courseKeywordInput" value="${escapeHtml(f.keyword)}" placeholder="Search title, provider, skills" oninput="window.setCourseTextFilter('keyword', this.value, 'courseKeywordInput')" />
     </label>
-    ${actionSelect('Country', 'courseFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="courseFilterCountry"', `<select id="courseFilterCountry" onchange="setCourseFilter('country', this.value)"`)}
+    ${actionSelect('Country', 'courseFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="courseFilterCountry"', `<select id="courseFilterCountry" onchange="window.setCourseFilter('country', this.value)"`)}
     <label>
       Region / City
-      <input value="${escapeHtml(f.region)}" placeholder="e.g. Remote or Nairobi" oninput="setCourseFilter('region', this.value)" />
+      <input id="courseRegionInput" value="${escapeHtml(f.region)}" placeholder="e.g. Remote or Nairobi" oninput="window.setCourseTextFilter('region', this.value, 'courseRegionInput')" />
     </label>
-    ${actionSelect('Delivery mode', 'courseFilterMode', OPTION_SETS.deliveryModes, f.mode, 'All delivery modes').replace('<select id="courseFilterMode"', `<select id="courseFilterMode" onchange="setCourseFilter('mode', this.value)"`)}
+    ${actionSelect('Delivery mode', 'courseFilterMode', OPTION_SETS.deliveryModes, f.mode, 'All delivery modes').replace('<select id="courseFilterMode"', `<select id="courseFilterMode" onchange="window.setCourseFilter('mode', this.value)"`)}
   `;
   return `
     <div class="grid">
       <div class="card span-12">
         ${onboardingPanel()}
-        ${filtersPanel('Search training and skills pathways', 'Use keyword, location and delivery-mode filters to find relevant verified learning offers.', controls, 'clearCourseFilters')}
+        ${filtersPanel('Search training and skills pathways', 'Use keyword, location and delivery-mode filters to find relevant verified learning offers. Results update after you pause typing.', controls, 'clearCourseFilters')}
         <div class="results-meta">
           <span class="pill pill-verified">${list.length} result${list.length === 1 ? '' : 's'}</span>
           <span class="pill">Curated training catalogue</span>
@@ -1728,6 +1791,8 @@ function render() {
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
   else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
   document.getElementById('content').innerHTML = c;
+  restoreInputFocus();
+  syncMobileNavState();
 }
 
 
@@ -1741,8 +1806,6 @@ function closeAuthModal() {
   document.getElementById('authModal')?.classList.add('hidden');
   document.getElementById('authMessage').textContent = '';
   document.getElementById('authPassword').value = '';
-  const confirmInput = document.getElementById('authConfirmPassword');
-  if (confirmInput) confirmInput.value = '';
 }
 
 function updateAuthModal() {
@@ -1751,8 +1814,6 @@ function updateAuthModal() {
   document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
   document.getElementById('fullNameWrap').style.display = isSignup ? 'block' : 'none';
   document.getElementById('roleWrap').style.display = isSignup ? 'block' : 'none';
-  const confirmWrap = document.getElementById('confirmPasswordWrap');
-  if (confirmWrap) confirmWrap.style.display = isSignup ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', !isSignup);
   document.getElementById('tabSignup').classList.toggle('active', isSignup);
   document.getElementById('authMessage').textContent = '';
@@ -1767,17 +1828,11 @@ async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value.trim();
-  const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
   const fullName = document.getElementById('authFullName').value.trim();
   const role = document.getElementById('authRole').value;
   const msg = document.getElementById('authMessage');
   msg.textContent = '';
   if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
-  if (authMode === 'signup') {
-    if (!fullName) { msg.textContent = 'Please enter your full name.'; return; }
-    if (!confirmPassword) { msg.textContent = 'Please confirm your password.'; return; }
-    if (password !== confirmPassword) { msg.textContent = 'Password and confirm password do not match.'; return; }
-  }
   let authResult;
   try {
     authResult = authMode === 'signup'
@@ -1793,15 +1848,7 @@ async function handleAuthSubmit() {
     msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
     return;
   }
-  if (authMode === 'signup' && !authResult.data.session) {
-    currentUser = null;
-    state = structuredClone(demoState);
-    state.view = 'home';
-    render();
-    msg.textContent = 'Account created successfully. Please check your email, verify your address, then sign in.';
-    return;
-  }
-  currentUser = authResult.data.session?.user || authResult.data.user || null;
+  currentUser = authResult.data.user || authResult.data.session?.user || null;
   if (currentUser) {
     let profile = await ensureProfile(currentUser);
     if (profile && authMode === 'signup') {
@@ -1837,9 +1884,9 @@ async function signOut() {
 
 window.saveProfile = async function () {
   if (!isConfigured) return alert('Supabase not connected');
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  const user = sessionData?.session?.user || null;
-  if (sessionError || !user) return alert('Please sign in first. If you have just created your account, verify your email first, then sign in again.');
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) return alert('Please sign in first.');
   const updates = {
     full_name: document.getElementById('profileName')?.value || '',
     country: document.getElementById('profileCountry')?.value || '',

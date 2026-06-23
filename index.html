@@ -9,6 +9,7 @@
   <script src="config.js"></script>
 </head>
 <body>
+  <div class="mobile-overlay hidden" id="mobileOverlay"></div>
   <div class="app">
     <aside class="side">
       <div class="brand">
@@ -27,6 +28,9 @@
     <main class="main">
       <section class="top">
         <div>
+          <div class="top-mobile-tools">
+            <button class="secondary mobile-menu-btn" id="mobileMenuBtn" type="button">☰ Menu</button>
+          </div>
           <div class="kicker" id="kicker">Live platform</div>
           <h2 id="pageTitle">Youth dashboard</h2>
           <p id="pageDesc">Connect young people to jobs, internships, training providers, employers and labour market intelligence.</p>
@@ -63,16 +67,9 @@
           <input id="authEmail" type="email" placeholder="Enter your email" />
         </label>
         <label>
-  Password
-  <input id="authPassword" type="password" placeholder="Enter your password" />
-</label>
-
-<label id="confirmPasswordWrap" style="display:none;">
-  Confirm Password
-  <input id="authConfirmPassword" type="password" placeholder="Confirm your password" />
-</label>
-
-        
+          Password
+          <input id="authPassword" type="password" placeholder="Enter your password" />
+        </label>
         <label class="full" id="roleWrap" style="display:none;">
           Role
           <select id="authRole">
