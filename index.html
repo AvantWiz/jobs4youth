@@ -25,21 +25,32 @@
       </div>
     </aside>
     <main class="main">
-      <section class="top">
-        <div>
-          <div class="kicker" id="kicker">Live platform</div>
+      <section class="top top-polished">
+        <div class="page-head">
+          <div class="kicker" id="kicker">Jobs4Youth</div>
           <h2 id="pageTitle">Youth dashboard</h2>
           <p id="pageDesc">Connect young people to jobs, internships, training providers, employers and labour market intelligence.</p>
-          <div class="auth-box">
+        </div>
+        <div class="top-tools">
+          <div class="auth-box auth-box-polished">
+            <span class="label auth-status-pill" id="authStatus"></span>
             <button class="secondary" id="btnSignIn">Sign in / Sign up</button>
             <button class="secondary" id="btnSignOut">Sign out</button>
-            <span class="label" id="authStatus"></span>
           </div>
+          <div class="role-switch" id="roleSwitch"></div>
         </div>
-        <div class="role-switch" id="roleSwitch"></div>
       </section>
       <div id="content"></div>
-      <div class="footer-note">Jobs4Youth Hub • secure youth opportunities platform</div>
+      <div class="footer-note footer-note-polished">
+        <div class="footer-branding">
+          <strong>Jobs4Youth</strong>
+          <span>Trusted youth opportunities, pathways and employer connections platform.</span>
+        </div>
+        <div class="footer-links">
+          <span>Support: info@jobs4youth.org</span>
+          <span>Public launch quality build</span>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -82,5 +93,22 @@
   </div>
 
   <script type="module" src="app.js"></script>
+
+  <div class="modal hidden" id="authSuccessModal">
+    <div class="modal-card auth-success-card">
+      <div class="modal-head">
+        <h3 id="authSuccessTitle">Confirm your email</h3>
+        <button class="secondary" onclick="window.closeAuthSuccessModal()">Close</button>
+      </div>
+      <div class="success-state">
+        <div class="success-icon">✓</div>
+        <p class="lead" id="authSuccessText">Please open your email and click the confirmation link to conclude the sign up process.</p>
+        <div class="hero-actions" style="margin-top:14px;">
+          <button class="primary" onclick="window.closeAuthSuccessModal()">Understood</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
