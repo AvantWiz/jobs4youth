@@ -160,8 +160,8 @@ function courseMetaPills(course) {
     course.country || 'Country not stated'
   ].filter(Boolean).map(value => `<span class="pill">${escapeHtml(value)}</span>`).join('');
 }
-function shortlistButton(label, active, onClickExpr) {
-  return `<button class="${active ? 'primary' : 'secondary'}" onclick="${onClickExpr}">${escapeHtml(label)}</button>`;
+function fitGuidanceBlock(titleText, bodyText) {
+  return `<div class="detail-guidance-card"><h4>${escapeHtml(titleText)}</h4><p class="label">${escapeHtml(bodyText)}</p></div>`;
 }
 
 window.setOpportunityFilter = function(field, value) {
@@ -468,9 +468,9 @@ function desc() {
   if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
-  if (state.view === 'shortlist') return 'Save promising jobs and training pathways to your shortlist, then compare and act when you are ready.';
-  if (state.view === 'opportunity detail') return 'Review the full opportunity profile, employer details and trust signals before deciding whether to apply.';
-  if (state.view === 'training detail') return 'Review the full training profile, institution details and pathway information before requesting enrolment.';
+  if (state.view === 'shortlist') return 'Save promising jobs and training pathways to your shortlist, compare them, and act when you are ready.';
+  if (state.view === 'opportunity detail') return 'Explore the full opportunity profile, trust signals, employer context and fit guidance before applying.';
+  if (state.view === 'training detail') return 'Explore the full training profile, institution context, outcomes and pathway guidance before requesting enrolment.';
   if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
   if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
   if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
@@ -559,7 +559,7 @@ async function loadJobsFromSupabase() {
   state.jobs = (data || []).map(job => ({
     id: job.id,
     title: job.title || 'No title',
-    org: job.organization_name || 'Unknown org',
+    org: job.organization_name || 'Unknown organisation',
     country: job.country || '',
     region: job.region || '',
     type: job.opportunity_type || '',
@@ -585,7 +585,7 @@ async function loadCoursesFromSupabase() {
   state.courses = (data || []).map(course => ({
     id: course.id,
     title: course.title || 'No title',
-    provider: course.provider_name || 'Unknown provider',
+    provider: course.provider_name || 'Unknown institution',
     mode: course.delivery_mode || '',
     duration: course.duration || '',
     skills: course.skills_covered || '',
@@ -604,7 +604,6 @@ async function loadCoursesFromSupabase() {
     modulesOverview: course.modules_overview || ''
   }));
 }
-
 
 
 async function loadSavedItemsFromSupabase() {
@@ -651,9 +650,7 @@ window.toggleSaveOpportunity = async function(opportunityId) {
     return alert('Opportunity removed from shortlist.');
   }
   const { error } = await supabase.from('saved_opportunities').insert([{ user_id: user.id, opportunity_id: opportunityId }]);
-  if (error) {
-        return alert(`Failed to save opportunity: ${error.message}`);
-  }
+  if (error) return alert(`Failed to save opportunity: ${error.message}`);
   await loadSavedItemsFromSupabase();
   render();
   alert('Opportunity added to your shortlist.');
@@ -670,13 +667,13 @@ window.toggleSaveCourse = async function(courseId) {
     if (error) return alert(`Failed to remove saved training: ${error.message}`);
     await loadSavedItemsFromSupabase();
     render();
-    return alert('Training opportunity removed from your shortlist.');
+    return alert('Training removed from shortlist.');
   }
   const { error } = await supabase.from('saved_courses').insert([{ user_id: user.id, course_id: courseId }]);
-  if (error) return alert(`Failed to save training opportunity: ${error.message}`);
+  if (error) return alert(`Failed to save training: ${error.message}`);
   await loadSavedItemsFromSupabase();
   render();
-  alert('Training opportunity added to your shortlist.');
+  alert('Training added to your shortlist.');
 };
 
 window.openOpportunityDetail = function(opportunityId) {
@@ -693,20 +690,19 @@ window.openCourseDetail = function(courseId) {
 
 window.applyCourse = async function(courseId) {
   if (!isConfigured) return alert('Supabase not connected');
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   const user = sessionData?.session?.user;
-  if (!user) return alert('Please sign in first before requesting enrolment.');
+  if (sessionError || !user) return alert('Please sign in first before requesting enrolment.');
   const profile = await ensureProfile(user);
   if (!profile || profile.role !== 'youth') return alert('Only youth accounts can request training enrolment.');
   const { error } = await supabase.from('course_applications').insert([{ course_id: courseId, applicant_id: user.id, application_status: 'Submitted' }]);
   if (error) {
-        if ((error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') {
-      return alert('You have already requested enrolment for this training.');
-    }
+    if ((error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') return alert('You have already requested enrolment for this training.');
     return alert(`Failed to submit training request: ${error.message}`);
   }
   alert('Training request submitted successfully.');
 };
+
 async function loadApplicationsFromSupabase() {
   state.applications = [];
   state.employerCandidates = [];
@@ -929,7 +925,6 @@ function jobCard(j, action) {
   const score = matchScore(j);
   const status = j.status || 'Pending';
   const isVerified = status === 'Verified';
-  const saved = isSavedOpportunity(j.id);
   const trustNote = isVerified
     ? 'Publicly visible verified listing'
     : status === 'Pending'
@@ -953,7 +948,7 @@ function jobCard(j, action) {
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
         <div class="job-actions-row">
           <button class="primary" onclick="window.openOpportunityDetail('${j.id}')">View details</button>
-          ${action ? `<button class="secondary" onclick="window.toggleSaveOpportunity('${j.id}')">${saved ? 'Saved to shortlist' : 'Save to shortlist'}</button>` : ''}
+          ${action ? `<button class="secondary" onclick="window.toggleSaveOpportunity('${j.id}')">${isSavedOpportunity(j.id) ? 'Saved to shortlist' : 'Save to shortlist'}</button>` : ''}
         </div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
@@ -975,7 +970,7 @@ window.applyJob = async function(id) {
     return alert(`Failed to apply: ${error.message}`);
   }
   await loadApplicationsFromSupabase();
-  alert('Application submitted successfully. A richer guided application flow is coming in the next build.');
+  alert('Application submitted successfully. Guided application and screening steps will be added next.');
   render();
 };
 
@@ -1313,7 +1308,17 @@ function shortlist() {
   return `
     <div class="grid">
       <div class="card span-12 shortlist-hero-card">
-        <div class="section-title"><div><div class="kicker">My shortlist</div><h3>Your saved opportunities and training pathways</h3><p class="label">Save first, compare options, then apply when you are ready.</p></div><div class="results-meta"><span class="pill pill-verified">${metrics.jobs} saved jobs</span><span class="pill">${metrics.courses} saved training offers</span></div></div>
+        <div class="section-title">
+          <div>
+            <div class="kicker">My shortlist</div>
+            <h3>Your saved opportunities and training pathways</h3>
+            <p class="label">Save first, compare options, then apply when you are ready.</p>
+          </div>
+          <div class="results-meta">
+            <span class="pill pill-verified">${metrics.jobs} saved jobs</span>
+            <span class="pill">${metrics.courses} saved training offers</span>
+          </div>
+        </div>
       </div>
       <div class="card span-6">
         <div class="section-title"><h3>Saved opportunities</h3><button class="secondary" onclick="setView('opportunities')">Browse more</button></div>
@@ -1354,18 +1359,32 @@ function shortlist() {
 function opportunityDetailPage() {
   const job = findOpportunity(state.selectedOpportunityId);
   if (!job) return `<div class="grid"><div class="card span-12"><div class="empty-card"><h4>Opportunity not found</h4><p class="label">The selected opportunity is no longer available or has not been loaded yet.</p><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div></div></div>`;
+  const profileStrength = youthProfileCompletion();
+  const fitMessage = profileStrength >= 80
+    ? 'Your profile has enough detail for a stronger application. Review the full role details and proceed when ready.'
+    : `Your profile is ${profileStrength}% complete. Strengthening your profile may improve how employers interpret your fit.`;
   return `
     <div class="grid">
       <div class="card span-8 detail-hero-card">
-        <div class="section-title"><div><div class="kicker">Opportunity details</div><h3>${escapeHtml(job.title)}</h3><p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Region not stated')}, ${escapeHtml(job.country || 'Country not stated')}</p></div><div class="job-badges">${statusBadge(job.status || 'Verified')}${isSavedOpportunity(job.id) ? '<span class="pill pill-verified">Saved</span>' : ''}</div></div>
+        <div class="section-title">
+          <div>
+            <div class="kicker">Opportunity details</div>
+            <h3>${escapeHtml(job.title)}</h3>
+            <p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Region not stated')}, ${escapeHtml(job.country || 'Country not stated')}</p>
+          </div>
+          <div class="job-badges">${statusBadge(job.status || 'Verified')}${isSavedOpportunity(job.id) ? '<span class="pill pill-verified">Saved</span>' : ''}</div>
+        </div>
         <div class="results-meta">${opportunityMetaPills(job)}${job.workArrangement ? `<span class="pill">${escapeHtml(job.workArrangement)}</span>` : ''}${job.deadline ? `<span class="pill">Deadline ${escapeHtml(job.deadline)}</span>` : ''}</div>
         <p style="margin-top:14px;">${escapeHtml(job.desc || 'No detailed description provided.')}</p>
+        <div class="detail-block"><h4>Why this role matters</h4><p class="label">This opportunity sits within the Jobs4Youth trusted marketplace and is designed to help young people move from skills to employment through a more transparent pathway.</p></div>
         <div class="detail-block"><h4>Skills sought</h4><div>${(job.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('') || '<span class="label">Skills will appear here when available.</span>'}</div></div>
         <div class="detail-grid">
           <div class="detail-tile"><b>Education</b><span>${escapeHtml(job.education || 'Not stated')}</span></div>
           <div class="detail-tile"><b>Experience</b><span>${escapeHtml(job.experience || 'Not stated')}</span></div>
           <div class="detail-tile"><b>Compensation</b><span>${escapeHtml(job.compensation || 'Shared by employer during process')}</span></div>
           <div class="detail-tile"><b>Duration</b><span>${escapeHtml(job.duration || 'To be confirmed')}</span></div>
+          <div class="detail-tile"><b>Work arrangement</b><span>${escapeHtml(job.workArrangement || 'To be confirmed')}</span></div>
+          <div class="detail-tile"><b>Benefits / learning outcomes</b><span>${escapeHtml(job.benefits || job.learningOutcomes || 'To be shared by employer')}</span></div>
         </div>
       </div>
       <div class="card span-4 detail-sidebar-card">
@@ -1376,15 +1395,29 @@ function opportunityDetailPage() {
           <button class="secondary" onclick="window.toggleSaveOpportunity('${job.id}')">${isSavedOpportunity(job.id) ? 'Remove from shortlist' : 'Save to shortlist'}</button>
           <button class="secondary" onclick="setView('shortlist')">Open shortlist</button>
         </div>
-        <div class="soft-note" style="margin-top:12px;">Next guided application flow coming in the next build: profile readiness, screening questions and review before final submission.</div>
-        <div class="detail-block"><h4>Employer signal</h4><p class="label">This listing comes from a structured employer workflow on Jobs4Youth. Public trust improves when organisations maintain complete profiles and pass verification review.</p></div>
+        <div class="trust-panel-detail">
+          <h4>Trust panel</h4>
+          <p class="label">This opportunity appears inside a moderated Jobs4Youth workflow. Listings become stronger public trust signals when the employer profile is complete and verification review is passed.</p>
+        </div>
+        <div class="trust-panel-detail">
+          <h4>Fit to your profile</h4>
+          <p class="label">${escapeHtml(fitMessage)}</p>
+        </div>
       </div>
       <div class="card span-12">
-        <div class="section-title"><h3>Suggested next moves</h3><button class="secondary" onclick="setView('training')">Explore training</button></div>
+        <div class="section-title"><h3>Pathway guidance</h3><button class="secondary" onclick="setView('training')">Explore training</button></div>
         <div class="detail-grid detail-grid-wide">
-          <div class="detail-tile"><b>Before applying</b><span>Review your profile, skills and education details so the employer sees a stronger candidate profile.</span></div>
-          <div class="detail-tile"><b>Related pathway</b><span>Explore training that strengthens your fit in areas connected to this opportunity.</span></div>
-          <div class="detail-tile"><b>Track your options</b><span>Save multiple opportunities in your shortlist before making a final application decision.</span></div>
+          ${fitGuidanceBlock('Before applying', 'Review your profile, skills and education details so the employer sees a stronger candidate profile.')}
+          ${fitGuidanceBlock('Suggested pathway', 'Explore training that strengthens your fit in areas connected to this opportunity if you still need to build confidence.')}
+          ${fitGuidanceBlock('Track your options', 'Save multiple opportunities in your shortlist before making a final application decision.')}
+        </div>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>Employer information</h3><button class="secondary" onclick="setView('opportunities')">Back to listing market</button></div>
+        <div class="detail-grid detail-grid-wide">
+          <div class="detail-tile"><b>Organisation</b><span>${escapeHtml(job.org)}</span></div>
+          <div class="detail-tile"><b>Location</b><span>${escapeHtml(job.region || 'Region not stated')}, ${escapeHtml(job.country || 'Country not stated')}</span></div>
+          <div class="detail-tile"><b>Visibility status</b><span>${escapeHtml(job.status || 'Pending')}</span></div>
         </div>
       </div>
     </div>
@@ -1394,19 +1427,33 @@ function opportunityDetailPage() {
 function trainingDetailPage() {
   const course = findCourse(state.selectedCourseId);
   if (!course) return `<div class="grid"><div class="card span-12"><div class="empty-card"><h4>Training opportunity not found</h4><p class="label">The selected training opportunity is no longer available or has not been loaded yet.</p><button class="secondary" onclick="setView('training')">Back to training</button></div></div></div>`;
+  const profileStrength = youthProfileCompletion();
+  const fitMessage = profileStrength >= 70
+    ? 'Your profile is sufficiently detailed to help you compare this pathway against your current goals and interests.'
+    : `Your profile is ${profileStrength}% complete. Add stronger profile details so pathway recommendations become more useful.`;
   return `
     <div class="grid">
       <div class="card span-8 detail-hero-card">
-        <div class="section-title"><div><div class="kicker">Training details</div><h3>${escapeHtml(course.title)}</h3><p class="label"><b>${escapeHtml(course.provider)}</b> • ${escapeHtml(course.region || 'Region not stated')}, ${escapeHtml(course.country || 'Country not stated')}</p></div><div class="job-badges">${statusBadge(course.status || 'Verified')}${isSavedCourse(course.id) ? '<span class="pill pill-verified">Saved</span>' : ''}</div></div>
+        <div class="section-title">
+          <div>
+            <div class="kicker">Training details</div>
+            <h3>${escapeHtml(course.title)}</h3>
+            <p class="label"><b>${escapeHtml(course.provider)}</b> • ${escapeHtml(course.region || 'Region not stated')}, ${escapeHtml(course.country || 'Country not stated')}</p>
+          </div>
+          <div class="job-badges">${statusBadge(course.status || 'Verified')}${isSavedCourse(course.id) ? '<span class="pill pill-verified">Saved</span>' : ''}</div>
+        </div>
         <div class="results-meta">${courseMetaPills(course)}${course.certification ? `<span class="pill">${escapeHtml(course.certification)}</span>` : ''}${course.applicationDeadline ? `<span class="pill">Deadline ${escapeHtml(course.applicationDeadline)}</span>` : ''}</div>
+        <div class="detail-block"><h4>Why this pathway matters</h4><p class="label">This training opportunity is designed to help young people strengthen employability and move more confidently toward verified labour market opportunities.</p></div>
         <div class="detail-block"><h4>Skills covered</h4><div>${(course.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('') || '<span class="label">Skills will appear here when available.</span>'}</div></div>
         <div class="detail-grid">
           <div class="detail-tile"><b>Certification</b><span>${escapeHtml(course.certification || 'Not stated')}</span></div>
           <div class="detail-tile"><b>Fees / sponsorship</b><span>${escapeHtml(course.fees || course.scholarshipInfo || 'To be confirmed')}</span></div>
           <div class="detail-tile"><b>Audience</b><span>${escapeHtml(course.audience || 'Open to relevant youth applicants')}</span></div>
           <div class="detail-tile"><b>Language</b><span>${escapeHtml(course.language || 'To be confirmed')}</span></div>
+          <div class="detail-tile"><b>Schedule</b><span>${escapeHtml(course.schedule || 'To be confirmed')}</span></div>
+          <div class="detail-tile"><b>Entry requirements</b><span>${escapeHtml(course.entryRequirements || 'To be confirmed by institution')}</span></div>
         </div>
-        <div class="detail-block"><h4>Institution overview</h4><p class="label">This training offer is shown through the Jobs4Youth institution workflow. Users should review mode, duration, outcomes and entry requirements before requesting enrolment.</p></div>
+        <div class="detail-block"><h4>Modules / outcomes</h4><p class="label">${escapeHtml(course.modulesOverview || 'Detailed modules and outcomes can be expanded further in the next build.')}</p></div>
       </div>
       <div class="card span-4 detail-sidebar-card">
         <h3>Build your pathway</h3>
@@ -1416,15 +1463,29 @@ function trainingDetailPage() {
           <button class="secondary" onclick="window.toggleSaveCourse('${course.id}')">${isSavedCourse(course.id) ? 'Remove from shortlist' : 'Save to shortlist'}</button>
           <button class="secondary" onclick="setView('shortlist')">Open shortlist</button>
         </div>
-        <div class="soft-note" style="margin-top:12px;">A richer guided training application flow with eligibility checks and enrolment questions is planned for the next build.</div>
-        <div class="detail-block"><h4>Pathway insight</h4><p class="label">Use this training page to compare learning pathways and decide which programme best supports your job-readiness goals.</p></div>
+        <div class="trust-panel-detail">
+          <h4>Trust panel</h4>
+          <p class="label">This training offer sits inside the monitored Jobs4Youth institution workflow. Public trust improves when the institution profile and verification process are complete.</p>
+        </div>
+        <div class="trust-panel-detail">
+          <h4>Fit to your pathway</h4>
+          <p class="label">${escapeHtml(fitMessage)}</p>
+        </div>
       </div>
       <div class="card span-12">
-        <div class="section-title"><h3>How to decide</h3><button class="secondary" onclick="setView('opportunities')">Explore opportunities</button></div>
+        <div class="section-title"><h3>Pathway guidance</h3><button class="secondary" onclick="setView('opportunities')">Explore jobs</button></div>
         <div class="detail-grid detail-grid-wide">
-          <div class="detail-tile"><b>Check fit</b><span>Compare the course mode, duration and requirements with your current availability and goals.</span></div>
-          <div class="detail-tile"><b>Link to work</b><span>Use training as part of a wider pathway to jobs, internships or career progression.</span></div>
-          <div class="detail-tile"><b>Keep your options</b><span>Save this programme to your shortlist if you still want to compare other institutions.</span></div>
+          ${fitGuidanceBlock('Check fit', 'Compare the course mode, duration and requirements with your current availability and goals.')}
+          ${fitGuidanceBlock('Link to work', 'Use the training as part of a wider pathway to jobs, internships or career progression.')}
+          ${fitGuidanceBlock('Keep your options', 'Save this programme to your shortlist if you still want to compare other institutions before applying.')}
+        </div>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>Institution information</h3><button class="secondary" onclick="setView('training')">Back to training market</button></div>
+        <div class="detail-grid detail-grid-wide">
+          <div class="detail-tile"><b>Institution</b><span>${escapeHtml(course.provider)}</span></div>
+          <div class="detail-tile"><b>Location</b><span>${escapeHtml(course.region || 'Region not stated')}, ${escapeHtml(course.country || 'Country not stated')}</span></div>
+          <div class="detail-tile"><b>Delivery mode</b><span>${escapeHtml(course.mode || 'To be confirmed')}</span></div>
         </div>
       </div>
     </div>
