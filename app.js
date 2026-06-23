@@ -183,7 +183,7 @@ function notificationCard(item) {
         ${item.emailStatus ? `<span class="pill">Email ${escapeHtml(item.emailStatus)}</span>` : ''}
       </div>
       <div class="hero-actions" style="margin-top:12px;">
-        ${!item.isRead ? `<button class="secondary" onclick="markNotificationRead('${escapeHtml(item.id)}')">Mark as read</button>` : ''}
+        ${!item.isRead ? `<button class="secondary" onclick="window.markNotificationRead('${escapeHtml(item.id)}')">Mark as read</button>` : ''}
       </div>
     </div>
   `;
@@ -205,8 +205,8 @@ function documentReviewCard(doc, adminMode = false) {
       </div>
       ${doc.adminNotes ? `<div class="support-admin-note"><b>Admin note:</b> ${escapeHtml(doc.adminNotes)}</div>` : ''}
       <div class="document-actions">
-        <button class="secondary" onclick="openVerificationDocument('${escapeHtml(doc.storagePath)}')">Open document</button>
-        ${adminMode ? `<button class="primary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Approved')">Approve document</button><button class="secondary" onclick="updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Rejected')">Reject document</button>` : ''}
+        <button class="secondary" onclick="window.openVerificationDocument('${escapeHtml(doc.storagePath)}')">Open document</button>
+        ${adminMode ? `<button class="primary" onclick="window.updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Approved')">Approve document</button><button class="secondary" onclick="window.updateVerificationDocumentStatus('${escapeHtml(doc.id)}','Rejected')">Reject document</button>` : ''}
       </div>
     </div>
   `;
@@ -788,7 +788,7 @@ function jobCard(j, action) {
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="window.applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -1146,7 +1146,7 @@ function youthProfileForm() {
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
       <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
-      <button class="primary full" onclick="saveProfile()">Save profile</button>
+      <button class="primary full" onclick="window.saveProfile()">Save profile</button>
     </div>
   `;
 }
@@ -1185,7 +1185,7 @@ function organizationProfileForm(label) {
         <div class="label" style="margin-top:8px;">${escapeHtml(verificationText)}</div>
       </div>
       ${decisionMessage}
-      <button class="primary full" onclick="saveOrganizationProfile()">Save organisation profile</button>
+      <button class="primary full" onclick="window.saveOrganizationProfile()">Save organisation profile</button>
       <div class="full verification-docs-panel">
         <div class="section-title"><div><h3>Verification documents</h3><p class="label">${escapeHtml(documentUploadGuidance(state.role))}</p></div><span class="pill">Private upload</span></div>
         ${docSummary}
@@ -1201,7 +1201,7 @@ function organizationProfileForm(label) {
           </label>
         </div>
         <div class="hero-actions" style="margin-top:12px;">
-          <button class="primary" onclick="uploadVerificationDocument()">Upload verification document</button>
+          <button class="primary" onclick="window.uploadVerificationDocument()">Upload verification document</button>
         </div>
         <div class="label" id="verificationDocumentMessage" style="margin-top:10px;"></div>
         <div class="document-list" style="margin-top:14px;">
@@ -1256,7 +1256,7 @@ function postOpportunity() {
         ${actionSelect('Experience requirement','oppExperience', OPTION_SETS.experienceLevels, '', 'Choose experience requirement')}
         <label>Required skills (comma separated)<input id="oppSkills" placeholder="e.g. food safety, packaging, record keeping" /></label>
         <label class="full">Description<textarea id="oppDescription" placeholder="Describe responsibilities, duration, location, and who should apply."></textarea></label>
-        <button class="primary full" onclick="submitOpportunity()">Post opportunity</button>
+        <button class="primary full" onclick="window.submitOpportunity()">Post opportunity</button>
         <div class="label full" id="oppMessage"></div>
       </div>
     </div>
@@ -1334,7 +1334,7 @@ function postTraining() {
         ${actionSelect('Country','courseCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
         <label>Region / City<input id="courseRegion" placeholder="e.g. Nairobi / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
         <label class="full">Skills covered (comma separated)<input id="courseSkills" placeholder="e.g. agronomy, records, mobile money" /></label>
-        <button class="primary full" onclick="submitCourse()">Post training</button>
+        <button class="primary full" onclick="window.submitCourse()">Post training</button>
         <div class="label full" id="courseMessage"></div>
       </div>
     </div>
@@ -1400,7 +1400,7 @@ function verificationCard(item) {
         <h3>${escapeHtml(title(item.itemType))} • ${escapeHtml(item.reviewStatus)}</h3>
         ${details}
         ${docSection}
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="window.reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="window.reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
       </div>
       <div class="fit" style="--score:${item.reviewStatus === 'Approved' ? 100 : item.reviewStatus === 'Rejected' ? 30 : 60}"><span>${item.reviewStatus === 'Approved' ? '✓' : item.reviewStatus === 'Rejected' ? '✕' : '…'}</span></div>
     </div>
@@ -1427,7 +1427,7 @@ function adminDash() {
 function verification() {
   const pending = state.verificationItems.filter(i => i.reviewStatus === 'Pending');
   const reviewed = state.verificationItems.filter(i => i.reviewStatus !== 'Pending');
-  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
+  return `<div class="grid"><div class="card span-12"><div class="section-title"><h3>Admin verification queue</h3><button class="secondary" onclick="window.refreshAdminQueue()">Refresh queue</button></div><div class="label" id="verificationMessage"></div><h4 style="margin-top:12px;">Pending items</h4>${pending.length ? pending.map(verificationCard).join('') : '<p class="label">No pending verification items.</p>'}<h4 style="margin-top:18px;">Reviewed items</h4>${reviewed.length ? reviewed.map(verificationCard).join('') : '<p class="label">No reviewed items yet.</p>'}</div></div>`;
 }
 
 
