@@ -749,7 +749,8 @@ function renderShell() {
   const authStatus = document.getElementById('authStatus');
   const signInBtn = document.getElementById('btnSignIn');
   const signOutBtn = document.getElementById('btnSignOut');
-  if (authStatus) authStatus.textContent = currentUser ? currentUser.email : '';
+  const displayName = state.profile?.name || currentUser?.user_metadata?.full_name || currentUser?.email || '';
+  if (authStatus) authStatus.textContent = currentUser ? displayName : '';
   if (signInBtn) signInBtn.style.display = currentUser ? 'none' : '';
   if (signOutBtn) signOutBtn.style.display = currentUser ? '' : 'none';
 }
@@ -909,61 +910,107 @@ function homeSectionEmpty(titleText, bodyText, actionLabel, viewName) {
 function home() {
   const jobs = featuredJobs(3);
   const courses = featuredCourses(3);
-  const verifiedJobs = state.jobs.filter(j => j.status === 'Verified').length;
-  const verifiedCourses = state.courses.filter(c => c.status === 'Verified').length;
   return `
-    <div class="grid home-grid polished-home-grid">
-      <div class="card span-8 hero-card polished-hero-card">
-        <div class="hero-copy polished-hero-copy">
+    <div class="grid home-grid">
+      <div class="card span-8 hero-card">
+        <div class="hero-copy">
           <div class="kicker">Public continental platform</div>
-          <h3 class="hero-title">Trusted youth opportunities, internships and career pathways in one refined platform</h3>
-          <p class="hero-text">Jobs4Youth connects young people to verified opportunities, helps employers discover promising talent, and gives institutions a professional route to publish high-value training pathways.</p>
-          <div class="hero-actions polished-hero-actions">
+          <h3 class="hero-title">Verified youth opportunities, internships and skills pathways in one trusted platform</h3>
+          <p class="hero-text">Jobs4Youth helps young people discover credible opportunities, supports employers to reach job-ready talent, and enables institutions to publish relevant training offers across African labour markets.</p>
+          <div class="hero-actions">
             <button class="primary" onclick="setView('opportunities')">Browse opportunities</button>
             <button class="secondary" onclick="setView('training')">Browse training</button>
-            ${currentUser ? '<button class=\"secondary\" onclick=\"setView(\'dashboard\')\">Open dashboard</button>' : '<button class=\"secondary\" onclick=\"openSignup()\">Create account</button>'}
+            <button class="secondary" onclick="openSignup()">Create account</button>
+            <button class="secondary" onclick="openLogin()">Sign in</button>
           </div>
-          <div class="hero-points polished-hero-points">
+          <div class="hero-points">
             <span class="pill pill-verified">Verified listings</span>
-            <span class="pill">Employer and institution trust workflows</span>
-            <span class="pill">Pathways, shortlist and guided applications</span>
+            <span class="pill">Trusted employer and institution workflows</span>
+            <span class="pill">Career pathways and skills visibility</span>
           </div>
         </div>
       </div>
-      <div class="card span-4 hero-panel polished-hero-panel">
-        <h3>Platform snapshot</h3>
-        <div class="feature-stat"><span class="metric">${verifiedJobs}</span><span class="label">verified opportunities publicly visible</span></div>
-        <div class="feature-stat"><span class="metric">${verifiedCourses}</span><span class="label">verified training pathways available</span></div>
-        <div class="feature-stat"><span class="metric">3</span><span class="label">audiences served across one trusted ecosystem</span></div>
-        <div class="soft-note" style="margin-top:14px;">Jobs4Youth is built for youth, employers, institutions and public-interest partners that want a more credible labour market experience.</div>
+      <div class="card span-4 hero-panel">
+        <h3>Why Jobs4Youth</h3>
+        <div class="feature-stat"><span class="metric">${state.jobs.filter(j => j.status === 'Verified').length}</span><span class="label">verified opportunities currently visible</span></div>
+        <div class="feature-stat"><span class="metric">${state.courses.filter(c => c.status === 'Verified').length}</span><span class="label">verified training offers and skills pathways</span></div>
+        <div class="feature-stat"><span class="metric">4</span><span class="label">connected user groups: youth, employers, institutions and admins</span></div>
+        <div class="soft-note">Public listings are moderated through platform governance and role-based review workflows.</div>
       </div>
-      <div class="card span-12 polished-section-card">
-        <div class="section-title"><div><div class="kicker">Why the platform matters</div><h3>More than a vacancy board</h3></div></div>
-        <div class="detail-grid detail-grid-wide">
-          <div class="detail-tile"><b>For youth</b><span>Discover verified work and learning opportunities, save them to a shortlist, and apply through clearer guided flows.</span></div>
-          <div class="detail-tile"><b>For employers</b><span>Publish opportunities professionally, collect better applicant signals, and manage candidate workflows with more structure.</span></div>
-          <div class="detail-tile"><b>For institutions</b><span>Publish pathways that connect learning to work and present training offers with more trust and clearer outcomes.</span></div>
+
+      <div class="card span-12">${onboardingPanel()}</div>
+
+      <div class="card span-12">
+        <div class="section-title"><h3>Choose your pathway</h3><span class="pill">Public quick start</span></div>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h4>For youth</h4>
+            <p>Find jobs, internships, apprenticeships and training offers that match your location, education and skills interests.</p>
+            <button class="secondary" onclick="setView('opportunities')">Explore opportunities</button>
+          </div>
+          <div class="feature-card">
+            <h4>For employers</h4>
+            <p>Publish opportunities, review candidate applications and participate in a more trusted, moderated recruitment workflow.</p>
+            <button class="secondary" onclick="openSignup()">Create employer account</button>
+          </div>
+          <div class="feature-card">
+            <h4>For institutions</h4>
+            <p>Promote training programmes that respond to labour-market demand and help young people close skills gaps faster.</p>
+            <button class="secondary" onclick="openSignup()">Create institution account</button>
+          </div>
+          <div class="feature-card">
+            <h4>For partners and administrators</h4>
+            <p>Support transparent verification, moderation and labour-market visibility across the platform ecosystem.</p>
+            <button class="secondary" onclick="setView('about')">Learn more</button>
+          </div>
         </div>
       </div>
-      <div class="card span-6 polished-section-card">
-        <div class="section-title"><div><div class="kicker">Featured opportunities</div><h3>Current public listings</h3></div><button class="secondary" onclick="setView('opportunities')">See all</button></div>
-        ${jobs.length ? jobs.map(j => jobCard(j, true)).join('') : '<div class="empty-card"><h4>No featured opportunities yet</h4><p class="label">Verified opportunities will appear here as the public platform grows.</p></div>'}
+
+      <div class="card span-7">
+        <div class="section-title"><h3>Featured verified opportunities</h3><button class="secondary" onclick="setView('opportunities')">View all opportunities</button></div>
+        <p class="label">Only public-facing verified listings are highlighted here to improve trust and relevance.</p>
+        <div class="mini-grid">
+          ${jobs.length ? jobs.map(publicJobTeaser).join('') : homeSectionEmpty('No verified opportunities yet', 'Once reviewed opportunities are published, featured roles will appear here for public browsing.', 'Open opportunity marketplace', 'opportunities')}
+        </div>
       </div>
-      <div class="card span-6 polished-section-card">
-        <div class="section-title"><div><div class="kicker">Featured training</div><h3>Skills and pathway offers</h3></div><button class="secondary" onclick="setView('training')">See all</button></div>
-        ${courses.length ? courses.map(c => `
-          <div class="job course-preview-card ${c.status === 'Verified' ? 'job-verified' : ''}">
-            <div>
-              <div class="job-header-row">
-                <h3>${escapeHtml(c.title)}</h3>
-                <div class="job-badges">${statusBadge(c.status || 'Verified')}${c.mode ? `<span class="pill">${escapeHtml(c.mode)}</span>` : ''}</div>
-              </div>
-              <p><b>${escapeHtml(c.provider)}</b> • ${escapeHtml(c.region || 'Remote')}, ${escapeHtml(c.country || 'Multi-country')}</p>
-              <p class="label">${escapeHtml(c.duration || 'Flexible pathway duration')}</p>
-              <div>${(c.skills || '').split(',').filter(Boolean).slice(0,4).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
-            </div>
+
+      <div class="card span-5">
+        <div class="section-title"><h3>Featured training pathways</h3><button class="secondary" onclick="setView('training')">View all training</button></div>
+        <p class="label">Training providers can publish moderated learning offers aligned to market demand and youth pathways.</p>
+        <div class="mini-grid single-column">
+          ${courses.length ? courses.map(publicCourseTeaser).join('') : homeSectionEmpty('No verified training yet', 'Verified courses and skills programmes will appear here once institutions publish and admins approve them.', 'Browse training catalogue', 'training')}
+        </div>
+      </div>
+
+      <div class="card span-12 trust-strip">
+        <div class="section-title"><h3>Built for public trust and real world use</h3><span class="pill pill-verified">Moderated platform</span></div>
+        <div class="trust-grid">
+          <div class="trust-card">
+            <h4>Verification-first publishing</h4>
+            <p class="label">Employer and institution participation is supported by verification workflows, while new opportunities and courses go through review before they are promoted.</p>
           </div>
-        `).join('') : '<div class="empty-card"><h4>No featured training yet</h4><p class="label">Training pathways will appear here as institutions publish verified offers.</p></div>'}
+          <div class="trust-card">
+            <h4>Structured profiles and cleaner data</h4>
+            <p class="label">The platform already uses role-based profiles, structured fields and protected access rules to support safer public use and better matching.</p>
+          </div>
+          <div class="trust-card">
+            <h4>Actionable pathways for youth</h4>
+            <p class="label">Jobs4Youth is not only a vacancy site, it also connects opportunities, training and labour market signals in one evolving ecosystem.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-12 final-cta">
+        <div>
+          <div class="kicker">Ready to get started?</div>
+          <h3>Join the Jobs4Youth network</h3>
+          <p class="label">Create an account to apply for opportunities, publish vacancies, share training offers or manage verification workflows.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="primary" onclick="openSignup()">Create account</button>
+          <button class="secondary" onclick="openLogin()">Sign in</button>
+          <button class="secondary" onclick="setView('contact')">Contact platform team</button>
+        </div>
       </div>
     </div>
   `;
@@ -1708,12 +1755,11 @@ window.closeAuthSuccessModal = function() {
 function closeAuthModal() {
   document.getElementById('authModal')?.classList.add('hidden');
   document.getElementById('authMessage').textContent = '';
-  const emailInput = document.getElementById('authEmail');
-  const passwordInput = document.getElementById('authPassword');
-  const nameInput = document.getElementById('authFullName');
-  if (emailInput) emailInput.value = '';
-  if (passwordInput) passwordInput.value = '';
-  if (nameInput) nameInput.value = '';
+  const ids = ['authEmail','authPassword','authConfirmPassword','authFullName'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
 }
 
 function updateAuthModal() {
@@ -1722,6 +1768,8 @@ function updateAuthModal() {
   document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
   document.getElementById('fullNameWrap').style.display = isSignup ? 'block' : 'none';
   document.getElementById('roleWrap').style.display = isSignup ? 'block' : 'none';
+  const confirmWrap = document.getElementById('confirmPasswordWrap');
+  if (confirmWrap) confirmWrap.style.display = isSignup ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', !isSignup);
   document.getElementById('tabSignup').classList.toggle('active', isSignup);
   document.getElementById('authMessage').textContent = isSignup ? 'You will need to confirm your email before the first sign in.' : '';
@@ -1736,11 +1784,13 @@ async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value.trim();
+  const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
   const fullName = document.getElementById('authFullName').value.trim();
   const role = document.getElementById('authRole').value;
   const msg = document.getElementById('authMessage');
   msg.textContent = '';
   if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
+  if (authMode === 'signup' && password !== confirmPassword) { msg.textContent = 'Passwords do not match.'; return; }
   let authResult;
   try {
     authResult = authMode === 'signup'

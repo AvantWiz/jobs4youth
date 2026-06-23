@@ -25,20 +25,18 @@
       </div>
     </aside>
     <main class="main">
-      <section class="top top-polished">
-        <div class="page-head">
-          <div class="kicker" id="kicker">Jobs4Youth</div>
+      <section class="top">
+        <div>
+          <div class="kicker" id="kicker">Live platform</div>
           <h2 id="pageTitle">Youth dashboard</h2>
           <p id="pageDesc">Connect young people to jobs, internships, training providers, employers and labour market intelligence.</p>
-        </div>
-        <div class="top-tools">
           <div class="auth-box auth-box-polished">
             <span class="label auth-status-pill" id="authStatus"></span>
             <button class="secondary" id="btnSignIn">Sign in / Sign up</button>
             <button class="secondary" id="btnSignOut">Sign out</button>
           </div>
-          <div class="role-switch" id="roleSwitch"></div>
         </div>
+        <div class="role-switch" id="roleSwitch"></div>
       </section>
       <div id="content"></div>
       <div class="footer-note footer-note-polished">
@@ -48,7 +46,7 @@
         </div>
         <div class="footer-links">
           <span>Support: info@jobs4youth.org</span>
-          <span>Public launch quality build</span>
+          <span>Professional public launch build</span>
         </div>
       </div>
     </main>
@@ -76,6 +74,10 @@
         <label>
           Password
           <input id="authPassword" type="password" placeholder="Enter your password" />
+        </label>
+        <label id="confirmPasswordWrap" style="display:none;">
+          Confirm Password
+          <input id="authConfirmPassword" type="password" placeholder="Confirm your password" />
         </label>
         <label class="full" id="roleWrap" style="display:none;">
           Role
