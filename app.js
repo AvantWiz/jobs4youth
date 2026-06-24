@@ -38,7 +38,16 @@ const demoState = {
   employerCandidates: [],
   verificationItems: [],
   verificationDocuments: [],
-  notifications: []
+  notifications: [],
+  signalLayer: {
+    skillDemand: [],
+    skillSupply: [],
+    skillGap: [],
+    trainingGap: [],
+    employerBottlenecks: [],
+    underservedSegments: [],
+    countrySignals: []
+  }
 };
 
 let state = structuredClone(demoState);
@@ -406,6 +415,155 @@ function matchScore(job) {
   if ((job.region || '') === (state.profile.region || '')) base += 10;
   if ((job.country || '') === (state.profile.country || '')) base += 6;
   return Math.min(98, base);
+}
+
+function splitSkillsSimple(value) {
+  return [...new Set(String(value || '').split(/[;,\n]/).map(item => item.trim()).filter(Boolean))];
+}
+function deriveSignalLayerLocally() {
+  const skillDemandMap = {};
+  const skillSupplyMap = {};
+  const trainingSupplyMap = {};
+  const countryMap = {};
+  const underservedMap = {};
+  const employerBottlenecks = [];
+  (state.jobs || []).filter(job => (job.status || '') === 'Verified').forEach(job => {
+    const country = job.country || 'Unspecified';
+    const region = job.region || 'Unspecified';
+    countryMap[country] = countryMap[country] || { country, youthProfiles: 0, employers: 0, institutions: 0, verifiedOpportunities: 0, verifiedCourses: 0, applicationsTotal: 0 };
+    countryMap[country].verifiedOpportunities += 1;
+    splitSkillsSimple(job.skills).forEach(skill => {
+      const key = `${country}|||${region}|||${skill.toLowerCase()}`;
+      skillDemandMap[key] = skillDemandMap[key] || { country, region, skillName: skill, opportunitiesCount: 0, skillMentions: 0 };
+      skillDemandMap[key].skillMentions += 1;
+      skillDemandMap[key].opportunitiesCount += 1;
+    });
+    const applicationsReceived = (state.applications || []).filter(a => typeof a === 'object' ? a.opportunityId === job.id : a === job.id).length;
+    employerBottlenecks.push({
+      opportunityTitle: job.title,
+      organizationName: job.org,
+      country,
+      region,
+      applicationsReceived,
+      bottleneckSignal: applicationsReceived === 0 ? 'Low Applications' : applicationsReceived <= 2 ? 'Thin Pipeline' : 'Active Pipeline'
+    });
+  });
+  (state.courses || []).filter(course => (course.status || '') === 'Verified').forEach(course => {
+    const country = course.country || 'Unspecified';
+    const region = course.region || 'Unspecified';
+    countryMap[country] = countryMap[country] || { country, youthProfiles: 0, employers: 0, institutions: 0, verifiedOpportunities: 0, verifiedCourses: 0, applicationsTotal: 0 };
+    countryMap[country].verifiedCourses += 1;
+    splitSkillsSimple(course.skills).forEach(skill => {
+      const key = `${country}|||${region}|||${skill.toLowerCase()}`;
+      trainingSupplyMap[key] = trainingSupplyMap[key] || { country, region, skillName: skill, verifiedCoursesCoveringSkill: 0 };
+      trainingSupplyMap[key].verifiedCoursesCoveringSkill += 1;
+    });
+  });
+  (state.employerCandidates || []).forEach(candidate => {
+    const country = candidate.country || 'Unspecified';
+    countryMap[country] = countryMap[country] || { country, youthProfiles: 0, employers: 0, institutions: 0, verifiedOpportunities: 0, verifiedCourses: 0, applicationsTotal: 0 };
+    countryMap[country].applicationsTotal += 1;
+  });
+  const profile = state.profile || {};
+  if (profile.country) {
+    const country = profile.country || 'Unspecified';
+    countryMap[country] = countryMap[country] || { country, youthProfiles: 0, employers: 0, institutions: 0, verifiedOpportunities: 0, verifiedCourses: 0, applicationsTotal: 0 };
+    if (state.role === 'youth') countryMap[country].youthProfiles += 1;
+    if (state.role === 'employer') countryMap[country].employers += 1;
+    if (state.role === 'institution') countryMap[country].institutions += 1;
+  }
+  splitSkillsSimple(profile.skills).forEach(skill => {
+    const country = profile.country || 'Unspecified';
+    const region = profile.region || 'Unspecified';
+    const key = `${country}|||${region}|||${skill.toLowerCase()}`;
+    skillSupplyMap[key] = skillSupplyMap[key] || { country, region, skillName: skill, youthWithSkill: 0 };
+    skillSupplyMap[key].youthWithSkill += 1;
+  });
+  if (state.role === 'youth') {
+    const key = `${profile.country || 'Unspecified'}|||${profile.region || 'Unspecified'}|||${profile.education || 'Unspecified'}|||${profile.experience || 'Unspecified'}`;
+    underservedMap[key] = underservedMap[key] || {
+      country: profile.country || 'Unspecified',
+      region: profile.region || 'Unspecified',
+      educationLevel: profile.education || 'Unspecified',
+      experienceLevel: profile.experience || 'Unspecified',
+      youthProfiles: 0,
+      profilesWithoutSkills: 0,
+      profilesWithoutInterests: 0,
+      profilesWithoutCareerGoal: 0,
+      averageProfileStrength: 0
+    };
+    underservedMap[key].youthProfiles += 1;
+    if (!String(profile.skills || '').trim()) underservedMap[key].profilesWithoutSkills += 1;
+    if (!String(profile.interests || '').trim()) underservedMap[key].profilesWithoutInterests += 1;
+    if (!String(profile.careerGoal || '').trim()) underservedMap[key].profilesWithoutCareerGoal += 1;
+    const strength = [profile.skills, profile.interests, profile.education, profile.country, profile.region].filter(v => String(v || '').trim()).length / 5 * 100;
+    underservedMap[key].averageProfileStrength = strength;
+  }
+  const skillDemand = Object.values(skillDemandMap).sort((a,b) => b.opportunitiesCount - a.opportunitiesCount);
+  const skillSupply = Object.values(skillSupplyMap).sort((a,b) => b.youthWithSkill - a.youthWithSkill);
+  const trainingGap = Object.values(skillDemandMap).map(item => {
+    const key = `${item.country}|||${item.region}|||${item.skillName.toLowerCase()}`;
+    const supply = trainingSupplyMap[key]?.verifiedCoursesCoveringSkill || 0;
+    return { ...item, verifiedCoursesCoveringSkill: supply, trainingGapCount: Math.max(item.opportunitiesCount - supply, 0) };
+  }).sort((a,b) => b.trainingGapCount - a.trainingGapCount);
+  const skillGap = Object.values(skillDemandMap).map(item => {
+    const key = `${item.country}|||${item.region}|||${item.skillName.toLowerCase()}`;
+    const supply = skillSupplyMap[key]?.youthWithSkill || 0;
+    return { ...item, youthSupply: supply, gapCount: Math.max(item.opportunitiesCount - supply, 0) };
+  }).sort((a,b) => b.gapCount - a.gapCount);
+  state.signalLayer = {
+    skillDemand,
+    skillSupply,
+    skillGap,
+    trainingGap,
+    employerBottlenecks: employerBottlenecks.sort((a,b) => a.applicationsReceived - b.applicationsReceived),
+    underservedSegments: Object.values(underservedMap).sort((a,b) => a.averageProfileStrength - b.averageProfileStrength),
+    countrySignals: Object.values(countryMap).sort((a,b) => b.verifiedOpportunities - a.verifiedOpportunities)
+  };
+}
+async function loadSignalLayerFromSupabase() {
+  state.signalLayer = { skillDemand: [], skillSupply: [], skillGap: [], trainingGap: [], employerBottlenecks: [], underservedSegments: [], countrySignals: [] };
+  if (!isConfigured || !supabase || !currentUser) {
+    deriveSignalLayerLocally();
+    return;
+  }
+  try {
+    const [dem, sup, gap, tgap, bottlenecks, underserved, countrySignals] = await Promise.all([
+      supabase.from('v_skill_demand_signals').select('*').order('opportunities_count', { ascending: false }).limit(20),
+      supabase.from('v_skill_supply_signals').select('*').order('youth_with_skill', { ascending: false }).limit(20),
+      supabase.from('v_skill_gap_signals').select('*').order('gap_count', { ascending: false }).limit(20),
+      supabase.from('v_training_gap_signals').select('*').order('training_gap_count', { ascending: false }).limit(20),
+      supabase.from('v_employer_hiring_bottlenecks').select('*').order('applications_received', { ascending: true }).limit(12),
+      supabase.from('v_underserved_youth_segments').select('*').order('average_profile_strength', { ascending: true }).limit(12),
+      supabase.from('v_country_activity_signals').select('*').order('verified_opportunities', { ascending: false }).limit(20)
+    ]);
+    state.signalLayer = {
+      skillDemand: dem.error ? [] : (dem.data || []).map(item => ({ country: item.country, region: item.region, skillName: item.skill_name, opportunitiesCount: item.opportunities_count, skillMentions: item.skill_mentions })),
+      skillSupply: sup.error ? [] : (sup.data || []).map(item => ({ country: item.country, region: item.region, skillName: item.skill_name, youthWithSkill: item.youth_with_skill })),
+      skillGap: gap.error ? [] : (gap.data || []).map(item => ({ country: item.country, region: item.region, skillName: item.skill_name, demandOpportunities: item.demand_opportunities, youthSupply: item.youth_supply, gapCount: item.gap_count, gapPercent: item.gap_percent })),
+      trainingGap: tgap.error ? [] : (tgap.data || []).map(item => ({ country: item.country, region: item.region, skillName: item.skill_name, demandOpportunities: item.demand_opportunities, verifiedCoursesCoveringSkill: item.verified_courses_covering_skill, trainingGapCount: item.training_gap_count })),
+      employerBottlenecks: bottlenecks.error ? [] : (bottlenecks.data || []).map(item => ({ opportunityTitle: item.title, organizationName: item.organization_name, country: item.country, region: item.region, applicationsReceived: item.applications_received, bottleneckSignal: item.bottleneck_signal, pipelineAgeDays: item.pipeline_age_days })),
+      underservedSegments: underserved.error ? [] : (underserved.data || []).map(item => ({ country: item.country, region: item.region, educationLevel: item.education_level, experienceLevel: item.experience_level, youthProfiles: item.youth_profiles, profilesWithoutSkills: item.profiles_without_skills, profilesWithoutInterests: item.profiles_without_interests, profilesWithoutCareerGoal: item.profiles_without_career_goal, averageProfileStrength: item.average_profile_strength })),
+      countrySignals: countrySignals.error ? [] : (countrySignals.data || []).map(item => ({ country: item.country, youthProfiles: item.youth_profiles, employers: item.employers, institutions: item.institutions, verifiedOpportunities: item.verified_opportunities, verifiedCourses: item.verified_courses, applicationsTotal: item.applications_total }))
+    };
+  } catch (error) {
+    console.warn('Signal layer load warning:', error);
+    deriveSignalLayerLocally();
+  }
+}
+function signalTopItems(list, count = 5) {
+  return [...(list || [])].slice(0, count);
+}
+function signalMetricCard(titleText, value, bodyText) {
+  return `<div class="card span-3"><div class="label">${escapeHtml(titleText)}</div><div class="metric">${escapeHtml(String(value))}</div><div class="label">${escapeHtml(bodyText)}</div></div>`;
+}
+function signalListCard(titleText, items, renderItem, emptyText = 'No signal data available yet.') {
+  return `
+    <div class="card span-6">
+      <div class="section-title"><h3>${escapeHtml(titleText)}</h3><span class="pill pill-trust">Live signal</span></div>
+      ${items.length ? `<div class="mini-grid single-column">${items.map(renderItem).join('')}</div>` : `<div class="empty-card"><h4>No signal data yet</h4><p class="label">${escapeHtml(emptyText)}</p></div>`}
+    </div>
+  `;
 }
 
 
@@ -1319,7 +1477,7 @@ function institutionDash() {
     ${metrics()}
     <div class="grid" style="margin-top:18px">
       <div class="card span-6"><div class="section-title"><h3>Your training catalogue</h3><button class="secondary" onclick="setView('post training')">Post training</button></div>${myCourses.length ? myCourses.map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)} • ${escapeHtml(c.region)}, ${escapeHtml(c.country)}</span><br>${statusBadge(c.status)}</p>`).join('') : `<div class="empty-card"><h4>No courses posted yet</h4><p class="label">Publish your first training offer to begin building a visible learning catalogue on the platform.</p><button class="secondary" onclick="setView('post training')">Post first training</button></div>`}</div>
-      <div class="card span-6"><h3>Demand signals</h3>${bar('Food safety', 92)}${bar('Record keeping', 78)}${bar('Mechanization', 61)}${bar('Quality control', 57)}</div>
+      <div class="card span-6"><div class="section-title"><h3>Demand signals</h3><button class="secondary" onclick="setView('insights')">Open signal layer</button></div>${signalTopItems(state.signalLayer.trainingGap, 4).length ? signalTopItems(state.signalLayer.trainingGap, 4).map(item => `<p><b>${escapeHtml(item.skillName)}</b><br><span class="label">${escapeHtml(item.country)} • training gap ${item.trainingGapCount || 0} • demand ${item.demandOpportunities || 0}</span></p>`).join('') : `${bar('Food safety', 92)}${bar('Record keeping', 78)}${bar('Mechanization', 61)}${bar('Quality control', 57)}`}</div>
     </div>
   `;
 }
@@ -1416,14 +1574,27 @@ function verificationCard(item) {
 function adminDash() {
   const pendingCount = state.verificationItems.filter(i => i.reviewStatus === 'Pending').length;
   const unread = latestUnreadCount();
+  const topSkill = state.signalLayer.skillDemand[0]?.skillName || 'No demand signal yet';
+  const topGap = state.signalLayer.skillGap[0]?.skillName || 'No gap signal yet';
   return `
     ${metrics()}
     <div class="grid" style="margin-top:18px">
-      <div class="card span-4"><div class="label">Pending verification items</div><div class="metric">${pendingCount}</div></div>
-      <div class="card span-4"><div class="label">Unread notifications</div><div class="metric">${unread}</div></div>
-      <div class="card span-4"><div class="label">Decision messaging active</div><div class="metric">Yes</div></div>
+      <div class="card span-3"><div class="label">Pending verification items</div><div class="metric">${pendingCount}</div></div>
+      <div class="card span-3"><div class="label">Unread notifications</div><div class="metric">${unread}</div></div>
+      <div class="card span-3"><div class="label">Top requested skill</div><div class="metric" style="font-size:24px;">${escapeHtml(topSkill)}</div></div>
+      <div class="card span-3"><div class="label">Top unmet gap</div><div class="metric" style="font-size:24px;">${escapeHtml(topGap)}</div></div>
     </div>
-    <div class="grid" style="margin-top:18px"><div class="card span-7"><div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div><p class="label">Approve organisations, opportunities and courses from one place with document evidence and queued decision notifications.</p></div><div class="card span-5"><h3>Notification workflow</h3><p class="label">• in-app notifications<br>• email-ready message queue<br>• verification decision messaging<br>• user-facing notifications centre</p></div></div>
+    <div class="grid" style="margin-top:18px">
+      <div class="card span-7">
+        <div class="section-title"><h3>Verification queue</h3><button class="secondary" onclick="setView('verification')">Open queue</button></div>
+        <p class="label">Approve organisations, opportunities and courses from one place with document evidence and queued decision notifications.</p>
+        <div class="soft-note" style="margin-top:10px;">The new Labour Market Signal Layer now turns platform behaviour into institution-grade intelligence for governments, donors and market actors.</div>
+      </div>
+      <div class="card span-5">
+        <div class="section-title"><h3>Signal layer highlights</h3><button class="secondary" onclick="setView('insights')">Open insights dashboard</button></div>
+        <p class="label">• requested skills by geography<br>• youth skill supply vs demand<br>• training gaps for institutions<br>• employer hiring bottlenecks<br>• under-served youth segments</p>
+      </div>
+    </div>
   `;
 }
 
@@ -1599,7 +1770,34 @@ function notificationsCenter() {
 }
 
 function insights() {
-  return trustPageShell('Insights', 'Skills demand dashboard', `${bar('Food safety', 92)}${bar('Packaging', 78)}${bar('Record keeping', 74)}${bar('Dairy', 63)}${bar('Mechanization', 58)}${bar('Quality control', 57)}`);
+  const demand = signalTopItems(state.signalLayer.skillDemand, 6);
+  const gap = signalTopItems(state.signalLayer.skillGap, 6);
+  const trainingGap = signalTopItems(state.signalLayer.trainingGap, 6);
+  const bottlenecks = signalTopItems(state.signalLayer.employerBottlenecks, 5);
+  const underserved = signalTopItems(state.signalLayer.underservedSegments, 5);
+  const countries = signalTopItems(state.signalLayer.countrySignals, 6);
+  const totalDemand = (state.signalLayer.skillDemand || []).reduce((sum, item) => sum + Number(item.opportunitiesCount || 0), 0);
+  const totalGap = (state.signalLayer.skillGap || []).reduce((sum, item) => sum + Number(item.gapCount || 0), 0);
+  const totalTrainingGap = (state.signalLayer.trainingGap || []).reduce((sum, item) => sum + Number(item.trainingGapCount || 0), 0);
+  return `
+    <div class="grid">
+      ${signalMetricCard('Demanded skill signals', totalDemand || 0, 'Total visible skill demand captured across verified opportunities.')}
+      ${signalMetricCard('Skill gap count', totalGap || 0, 'Demand not yet matched by visible youth skill supply.')}
+      ${signalMetricCard('Training gap count', totalTrainingGap || 0, 'Demand not yet covered by enough verified training pathways.')}
+      ${signalMetricCard('Employer bottlenecks', bottlenecks.length || 0, 'Open or thin pipelines requiring intervention.')}
+      ${signalListCard('Most requested skills', demand, item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.skillName)}</h4><p class="label">${escapeHtml(item.country)}${item.region ? ' • ' + escapeHtml(item.region) : ''}</p></div><div class="job-badges"><span class="pill pill-verified">${item.opportunitiesCount || 0} opportunities</span></div></div><div class="chartbar"><div style="width:${Math.min(100, (item.opportunitiesCount || 0) * 10)}%"></div></div></div>`, 'Run Build 8 views in Supabase or create more verified opportunity data to populate this dashboard.')}
+      ${signalListCard('Skill gaps by geography', gap, item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.skillName)}</h4><p class="label">${escapeHtml(item.country)}${item.region ? ' • ' + escapeHtml(item.region) : ''}</p></div><div class="job-badges"><span class="pill">Gap ${item.gapCount || 0}</span></div></div><p class="label">Demand: ${item.demandOpportunities || 0} • Youth supply: ${item.youthSupply || 0}${item.gapPercent !== undefined ? ' • Gap ' + item.gapPercent + '%' : ''}</p></div>`, 'Once pathways and normalized skill maps are active, the platform will calculate structural gap signals here.')}
+      ${signalListCard('Training gaps for institutions', trainingGap, item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.skillName)}</h4><p class="label">${escapeHtml(item.country)}${item.region ? ' • ' + escapeHtml(item.region) : ''}</p></div><div class="job-badges"><span class="pill">Gap ${item.trainingGapCount || 0}</span></div></div><p class="label">Demand: ${item.demandOpportunities || 0} • Verified courses covering skill: ${item.verifiedCoursesCoveringSkill || 0}</p></div>`, 'Institutions can use this to identify where new courses or modules are most needed.')}
+      ${signalListCard('Employer hiring bottlenecks', bottlenecks, item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.opportunityTitle)}</h4><p class="label">${escapeHtml(item.organizationName || 'Employer')} • ${escapeHtml(item.country)}</p></div><div class="job-badges">${statusBadge(item.bottleneckSignal || 'Signal')}</div></div><p class="label">Applications received: ${item.applicationsReceived || 0}${item.pipelineAgeDays ? ' • Pipeline age: ' + item.pipelineAgeDays + ' days' : ''}</p></div>`, 'This panel becomes stronger as employers post more opportunities and applications accumulate over time.')}
+      ${signalListCard('Under-served youth segments', underserved, item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.country)}${item.region ? ' • ' + escapeHtml(item.region) : ''}</h4><p class="label">${escapeHtml(item.educationLevel || 'Education not set')} • ${escapeHtml(item.experienceLevel || 'Experience not set')}</p></div><div class="job-badges"><span class="pill">Strength ${Math.round(item.averageProfileStrength || 0)}%</span></div></div><p class="label">Youth profiles: ${item.youthProfiles || 0} • Without skills: ${item.profilesWithoutSkills || 0} • Without career goal: ${item.profilesWithoutCareerGoal || 0}</p></div>`, 'This helps governments and donors target support to segments with weaker profile strength and pathway visibility.')}
+      <div class="card span-12">
+        <div class="section-title"><h3>Country activity overview</h3><span class="pill pill-trust">Government and donor view</span></div>
+        <div class="mini-grid ${countries.length > 3 ? '' : 'single-column'}">
+          ${countries.length ? countries.map(item => `<div class="mini-card"><div class="section-title"><div><h4>${escapeHtml(item.country)}</h4><p class="label">Youth: ${item.youthProfiles || 0} • Employers: ${item.employers || 0} • Institutions: ${item.institutions || 0}</p></div><div class="job-badges"><span class="pill pill-verified">${item.verifiedOpportunities || 0} opportunities</span></div></div><p class="label">Verified courses: ${item.verifiedCourses || 0} • Applications: ${item.applicationsTotal || 0}</p></div>`).join('') : '<div class="empty-card"><h4>No country-level activity yet</h4><p class="label">Once profiles, opportunities, courses and applications grow, country dashboards will populate automatically.</p></div>'}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function about() {
@@ -1822,6 +2020,7 @@ async function handleAuthSubmit() {
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
   await loadApplicationsFromSupabase();
+  await loadSignalLayerFromSupabase();
   await loadVerificationQueueFromSupabase();
   await loadVerificationDocumentsFromSupabase();
   await loadNotificationsFromSupabase();
@@ -1900,6 +2099,7 @@ async function initializeApp() {
     await loadJobsFromSupabase();
     await loadCoursesFromSupabase();
     await loadApplicationsFromSupabase();
+    await loadSignalLayerFromSupabase();
     await loadVerificationQueueFromSupabase();
     await loadVerificationDocumentsFromSupabase();
     await loadNotificationsFromSupabase();
@@ -1918,6 +2118,7 @@ async function initializeApp() {
       await loadJobsFromSupabase();
       await loadCoursesFromSupabase();
       await loadApplicationsFromSupabase();
+      await loadSignalLayerFromSupabase();
       await loadVerificationQueueFromSupabase();
       await loadVerificationDocumentsFromSupabase();
       await loadNotificationsFromSupabase();

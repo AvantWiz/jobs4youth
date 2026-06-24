@@ -413,3 +413,55 @@
 .footer-branding{display:flex;flex-direction:column;gap:6px}
 .footer-links{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:760px){.footer-note-polished{flex-direction:column;align-items:flex-start}.footer-links{justify-content:flex-start;flex-direction:column;gap:6px}.auth-box-polished{width:100%;justify-content:flex-start}}
+
+.pathway-card{border:1px solid var(--line);border-radius:22px;padding:18px;background:linear-gradient(180deg,#ffffff,#f7fbf2);box-shadow:0 10px 26px rgba(31,49,34,.05)}
+.pathway-card-compact{padding:16px;border-radius:20px}
+.pathway-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:10px}
+.pathway-head h4,.intelligence-panel h4{margin:0 0 6px}
+.pathway-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pathway-course-stack{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+.pathway-course-item{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:white}
+.intelligence-hero-card{background:linear-gradient(135deg,#f4faee,#ffffff)}
+.intelligence-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.intelligence-panel{border:1px solid var(--line);border-radius:18px;padding:16px;background:rgba(255,255,255,.82)}
+.pathway-recommendation-card{background:#fbfdf8;border:1px solid var(--line)}
+.pathway-summary-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.pathway-summary-item{display:inline-flex;align-items:center;padding:9px 12px;border-radius:999px;background:#f5f8f1;border:1px solid var(--line);font-size:12px;color:var(--ink)}
+.fit.readiness-strong{background:conic-gradient(var(--green) calc(var(--score)*1%),#e7eedf 0)}
+.fit.readiness-medium{background:conic-gradient(var(--gold) calc(var(--score)*1%),#eee7d5 0);color:#7a5a14}
+.fit.readiness-emerging{background:conic-gradient(#b9802b calc(var(--score)*1%),#f1eadf 0);color:#8a5a1e}
+@media(max-width:900px){.intelligence-grid{grid-template-columns:1fr}.pathway-head{flex-direction:column}.pathway-summary-row{flex-direction:column}}
+
+
+/* Curriculum Intelligence MVP */
+.curriculum-shell{background:linear-gradient(180deg,#ffffff,#f8fbf4)}
+.curriculum-intelligence-topbar{align-items:flex-start}
+.curriculum-message-note{margin:10px 0 0}
+.curriculum-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.curriculum-two-column{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-top:18px}
+.curriculum-panel,.curriculum-column-block{border:1px solid var(--line);border-radius:22px;background:white;padding:18px;box-shadow:0 10px 26px rgba(31,49,34,.05)}
+.curriculum-skill-row,.curriculum-gap-row,.curriculum-job-item{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid #edf3e6}
+.curriculum-skill-row:first-of-type,.curriculum-gap-row:first-of-type,.curriculum-job-item:first-of-type{border-top:0;padding-top:0}
+.curriculum-skill-row:last-of-type,.curriculum-gap-row:last-of-type,.curriculum-job-item:last-of-type{padding-bottom:0}
+.curriculum-skill-side,.curriculum-gap-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.curriculum-demand-score{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;border-radius:50%;background:#eef7e6;color:var(--green);font-weight:900;border:1px solid #d7e7ca}
+.curriculum-gap-pill,.curriculum-priority-pill,.curriculum-score-pill,.curriculum-job-match{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid transparent}
+.curriculum-gap-pill{background:#fff6dd;color:#7a5a14;border-color:#ead89f}
+.curriculum-priority-pill{background:#eff4fb;color:#315f9f;border-color:#c8d8f2}
+.curriculum-course-card,.curriculum-upgrade-card,.curriculum-jobs-card{border:1px solid var(--line);border-radius:20px;background:#fbfdf8;padding:16px;margin-top:12px}
+.curriculum-course-card:first-of-type,.curriculum-upgrade-card:first-of-type,.curriculum-jobs-card:first-of-type{margin-top:0}
+.curriculum-chartbar{margin-top:12px}
+.curriculum-score-pill.alignment-high{background:#e8f4dd;color:var(--green);border-color:#cde2b8}
+.curriculum-score-pill.alignment-medium{background:#fff6dd;color:#7a5a14;border-color:#ead89f}
+.curriculum-score-pill.alignment-low{background:#fdebe7;color:var(--danger);border-color:#efc4bc}
+.curriculum-upgrade-card p{margin:8px 0 0;line-height:1.6}
+.curriculum-jobs-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.curriculum-job-match{background:#f4faee;color:var(--green);border-color:#d6e7c4}
+@media(max-width:1180px){
+  .curriculum-two-column,.curriculum-jobs-grid{grid-template-columns:1fr}
+}
+@media(max-width:900px){
+  .curriculum-grid{grid-template-columns:1fr}
+  .curriculum-skill-row,.curriculum-gap-row,.curriculum-job-item{flex-direction:column}
+  .curriculum-skill-side,.curriculum-gap-side{align-items:flex-start}
+}
