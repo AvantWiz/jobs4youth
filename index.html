@@ -33,7 +33,7 @@
           <div class="auth-box auth-box-polished">
             <span class="label auth-status-pill" id="authStatus"></span>
             <button class="secondary" id="btnSignIn">Sign in / Sign up</button>
-            <button class="secondary" id="btnSignOut">Sign out</button>
+            <button class="secondary" id="btnSignOut" style="display:none;">Sign out</button>
           </div>
         </div>
         <div class="role-switch" id="roleSwitch"></div>
@@ -94,7 +94,65 @@
     </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script>
+  (function () {
+    function byId(id){ return document.getElementById(id); }
+    function show(el){ if(el) el.classList.remove('hidden'); }
+    function hide(el){ if(el) el.classList.add('hidden'); }
+    function setAuthMode(mode){
+      window.__SAFE_AUTH_MODE = mode;
+      var title = byId('authTitle');
+      var submit = byId('authSubmitBtn');
+      var full = byId('fullNameWrap');
+      var role = byId('roleWrap');
+      var confirmWrap = byId('confirmPasswordWrap');
+      var msg = byId('authMessage');
+      var loginTab = byId('tabLogin');
+      var signupTab = byId('tabSignup');
+      var signup = mode === 'signup';
+      if(title) title.textContent = signup ? 'Create your Jobs4Youth account' : 'Sign in to Jobs4Youth';
+      if(submit) submit.textContent = signup ? 'Create account' : 'Sign In';
+      if(full) full.style.display = signup ? 'block' : 'none';
+      if(role) role.style.display = signup ? 'block' : 'none';
+      if(confirmWrap) confirmWrap.style.display = signup ? 'block' : 'none';
+      if(msg) msg.textContent = signup ? 'You will need to confirm your email before the first sign in.' : '';
+      if(loginTab) loginTab.classList.toggle('active', !signup);
+      if(signupTab) signupTab.classList.toggle('active', signup);
+    }
+    window.safeOpenAuthModal = function(mode){ setAuthMode(mode || 'login'); show(byId('authModal')); };
+    window.safeCloseAuthModal = function(){ hide(byId('authModal')); };
+    document.addEventListener('DOMContentLoaded', function(){
+      var signIn = byId('btnSignIn');
+      var signOut = byId('btnSignOut');
+      var close = byId('closeAuthModal');
+      var loginTab = byId('tabLogin');
+      var signupTab = byId('tabSignup');
+      if(signOut) signOut.style.display = 'none';
+      if(signIn) signIn.addEventListener('click', function(){
+        if (window.openAuthModal) window.openAuthModal('login');
+        else window.safeOpenAuthModal('login');
+      });
+      if(close) close.addEventListener('click', function(){
+        if (window.closeAuthModal) window.closeAuthModal();
+        else window.safeCloseAuthModal();
+      });
+      if(loginTab) loginTab.addEventListener('click', function(){ setAuthMode('login'); });
+      if(signupTab) signupTab.addEventListener('click', function(){ setAuthMode('signup'); });
+      setAuthMode('login');
+      setTimeout(function(){
+        var nav = byId('nav');
+        var content = byId('content');
+        var authStatus = byId('authStatus');
+        var shellLikelyStuck = (!nav || !nav.innerHTML.trim()) && (!content || !content.innerHTML.trim()) && (!authStatus || !authStatus.textContent.trim());
+        if (shellLikelyStuck) {
+          var pageDesc = byId('pageDesc');
+          if (pageDesc) pageDesc.textContent = 'Safe mode active. If the main app script is delayed or fails, use Sign in / Sign up to continue.';
+        }
+      }, 1200);
+    });
+  })();
+</script>
+<script type="module" src="app.js"></script>
 
   <div class="modal hidden" id="authSuccessModal">
     <div class="modal-card auth-success-card">
