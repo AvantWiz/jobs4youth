@@ -33,7 +33,7 @@
           <div class="auth-box auth-box-polished">
             <span class="label auth-status-pill" id="authStatus"></span>
             <button class="secondary" id="btnSignIn">Sign in / Sign up</button>
-            <button class="secondary" id="btnSignOut" style="display:none;">Sign out</button>
+            <button class="secondary" id="btnSignOut">Sign out</button>
           </div>
         </div>
         <div class="role-switch" id="roleSwitch"></div>
@@ -51,7 +51,6 @@
       </div>
     </main>
   </div>
-
   <div class="modal hidden" id="authModal">
     <div class="modal-card">
       <div class="modal-head">
@@ -93,218 +92,7 @@
       </div>
     </div>
   </div>
-
-  <script>
-  (function () {
-    function byId(id){ return document.getElementById(id); }
-    function show(el){ if(el) el.classList.remove('hidden'); }
-    function hide(el){ if(el) el.classList.add('hidden'); }
-    function safeConfig(){ return window.JOBS4YOUTH_CONFIG || {}; }
-    function safeClient(){
-      try {
-        var cfg = safeConfig();
-        if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey) return null;
-        if (!window.__SAFE_SUPABASE__) {
-          window.__SAFE_SUPABASE__ = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-        }
-        return window.__SAFE_SUPABASE__;
-      } catch (e) {
-        console.error('Safe client error', e);
-        return null;
-      }
-    }
-    async function ensureFallbackProfile(user, role, fullName) {
-      var client = safeClient();
-      if (!client || !user) return null;
-      try {
-        var existing = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        if (existing && existing.data) return existing.data;
-        var safeRole = ['youth','employer','institution','admin'].indexOf(role) >= 0 ? role : 'youth';
-        var payload = {
-          id: user.id,
-          email: user.email,
-          full_name: fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
-          role: safeRole
-        };
-        var created = await client.from('profiles').insert([payload]).select().single();
-        return created.data || null;
-      } catch (e) {
-        console.warn('Fallback ensure profile warning', e);
-        return null;
-      }
-    }
-    function setAuthMode(mode){
-      window.__SAFE_AUTH_MODE = mode;
-      var title = byId('authTitle');
-      var submit = byId('authSubmitBtn');
-      var full = byId('fullNameWrap');
-      var role = byId('roleWrap');
-      var confirmWrap = byId('confirmPasswordWrap');
-      var msg = byId('authMessage');
-      var loginTab = byId('tabLogin');
-      var signupTab = byId('tabSignup');
-      var signup = mode === 'signup';
-      if(title) title.textContent = signup ? 'Create your Jobs4Youth account' : 'Sign in to Jobs4Youth';
-      if(submit) submit.textContent = signup ? 'Create account' : 'Sign In';
-      if(full) full.style.display = signup ? 'block' : 'none';
-      if(role) role.style.display = signup ? 'block' : 'none';
-      if(confirmWrap) confirmWrap.style.display = signup ? 'block' : 'none';
-      if(msg) msg.textContent = signup ? 'You will need to confirm your email before the first sign in.' : '';
-      if(loginTab) loginTab.classList.toggle('active', !signup);
-      if(signupTab) signupTab.classList.toggle('active', signup);
-    }
-    function setBusy(isBusy){
-      var btn = byId('authSubmitBtn');
-      if (btn) {
-        btn.disabled = !!isBusy;
-        btn.textContent = isBusy ? 'Please wait...' : (window.__SAFE_AUTH_MODE === 'signup' ? 'Create account' : 'Sign In');
-      }
-    }
-    function updateTopBarSignedIn(user){
-      var signIn = byId('btnSignIn');
-      var signOut = byId('btnSignOut');
-      var authStatus = byId('authStatus');
-      if (signIn) signIn.style.display = user ? 'none' : '';
-      if (signOut) signOut.style.display = user ? '' : 'none';
-      if (authStatus) authStatus.textContent = user ? (user.user_metadata?.full_name || user.email || '') : '';
-      var pageDesc = byId('pageDesc');
-      if (pageDesc && user) pageDesc.textContent = 'Signed in through safe mode. The main app script can still load afterward.';
-    }
-    async function fallbackSignOut(){
-      var client = safeClient();
-      if (!client) return;
-      try { await client.auth.signOut(); } catch (e) { console.warn('Fallback sign out warning', e); }
-      updateTopBarSignedIn(null);
-      hide(byId('authModal'));
-      var msg = byId('authMessage');
-      if (msg) msg.textContent = '';
-    }
-    async function fallbackHandleAuthSubmit(){
-      var client = safeClient();
-      var msg = byId('authMessage');
-      if (msg) msg.textContent = '';
-      if (!client) {
-        if (msg) msg.textContent = 'Supabase configuration is missing or failed to initialize.';
-        return;
-      }
-      var mode = window.__SAFE_AUTH_MODE || 'login';
-      var email = byId('authEmail')?.value?.trim() || '';
-      var password = byId('authPassword')?.value || '';
-      var confirm = byId('authConfirmPassword')?.value || '';
-      var fullName = byId('authFullName')?.value?.trim() || '';
-      var role = byId('authRole')?.value || 'youth';
-      if (!email || !password) {
-        if (msg) msg.textContent = 'Please enter email and password.';
-        return;
-      }
-      if (mode === 'signup' && password !== confirm) {
-        if (msg) msg.textContent = 'Passwords do not match.';
-        return;
-      }
-      setBusy(true);
-      try {
-        if (mode === 'signup') {
-          var signup = await client.auth.signUp({ email: email, password: password, options: { data: { full_name: fullName, role: role } } });
-          if (signup.error) throw signup.error;
-          if (!signup.data.session) {
-            hide(byId('authModal'));
-            var successModal = byId('authSuccessModal');
-            if (successModal) successModal.classList.remove('hidden');
-            var successTitle = byId('authSuccessTitle');
-            var successText = byId('authSuccessText');
-            if (successTitle) successTitle.textContent = 'Confirm your email to conclude sign up';
-            if (successText) successText.textContent = 'Your account has been created successfully. Please open your email and click the confirmation link before signing in.';
-            return;
-          }
-          await ensureFallbackProfile(signup.data.session.user, role, fullName);
-          updateTopBarSignedIn(signup.data.session.user);
-          hide(byId('authModal'));
-          window.location.reload();
-          return;
-        } else {
-          var signin = await client.auth.signInWithPassword({ email: email, password: password });
-          if (signin.error) throw signin.error;
-          await ensureFallbackProfile(signin.data.user || signin.data.session?.user, role, fullName);
-          updateTopBarSignedIn(signin.data.user || signin.data.session?.user || null);
-          hide(byId('authModal'));
-          window.location.reload();
-          return;
-        }
-      } catch (e) {
-        console.error('Fallback auth error', e);
-        if (msg) msg.textContent = e?.message || 'Authentication failed.';
-      } finally {
-        setBusy(false);
-      }
-    }
-    window.safeOpenAuthModal = function(mode){ setAuthMode(mode || 'login'); show(byId('authModal')); };
-    window.safeCloseAuthModal = function(){ hide(byId('authModal')); };
-    document.addEventListener('DOMContentLoaded', function(){
-      var signIn = byId('btnSignIn');
-      var signOut = byId('btnSignOut');
-      var close = byId('closeAuthModal');
-      var loginTab = byId('tabLogin');
-      var signupTab = byId('tabSignup');
-      var submit = byId('authSubmitBtn');
-      var resetBtn = byId('btnResetPassword');
-      if(signOut) signOut.style.display = 'none';
-      if(signIn) signIn.onclick = function(){
-        if (window.openAuthModal) window.openAuthModal('login');
-        else window.safeOpenAuthModal('login');
-      };
-      if(signOut) signOut.onclick = function(){
-        if (window.signOut) window.signOut();
-        else fallbackSignOut();
-      };
-      if(close) close.onclick = function(){
-        if (window.closeAuthModal) window.closeAuthModal();
-        else window.safeCloseAuthModal();
-      };
-      if(loginTab) loginTab.onclick = function(){ setAuthMode('login'); };
-      if(signupTab) signupTab.onclick = function(){ setAuthMode('signup'); };
-      if(submit) submit.onclick = function(){
-        if (window.handleAuthSubmit) window.handleAuthSubmit();
-        else fallbackHandleAuthSubmit();
-      };
-      if(resetBtn) resetBtn.onclick = async function(){
-        var client = safeClient();
-        var email = byId('authEmail')?.value?.trim() || '';
-        var msg = byId('authMessage');
-        if (!client || !email) {
-          if (msg) msg.textContent = 'Enter your email address first.';
-          return;
-        }
-        try {
-          var result = await client.auth.resetPasswordForEmail(email);
-          if (result.error) throw result.error;
-          if (msg) msg.textContent = 'Password reset email sent if the address exists.';
-        } catch (e) {
-          if (msg) msg.textContent = e?.message || 'Password reset failed.';
-        }
-      };
-      setAuthMode('login');
-      setTimeout(function(){
-        var nav = byId('nav');
-        var content = byId('content');
-        var authStatus = byId('authStatus');
-        var shellLikelyStuck = (!nav || !nav.innerHTML.trim()) && (!content || !content.innerHTML.trim()) && (!authStatus || !authStatus.textContent.trim());
-        if (shellLikelyStuck) {
-          var pageDesc = byId('pageDesc');
-          if (pageDesc) pageDesc.textContent = 'Safe mode active. If the main app script is delayed or fails, use Sign in / Sign up to continue.';
-        }
-      }, 1200);
-      var client = safeClient();
-      if (client) {
-        client.auth.getSession().then(function(result){
-          var user = result?.data?.session?.user || null;
-          updateTopBarSignedIn(user);
-        });
-      }
-    });
-  })();
-</script>
-<script type="module" src="app.js"></script>
-
+  <script type="module" src="app.js"></script>
   <div class="modal hidden" id="authSuccessModal">
     <div class="modal-card auth-success-card">
       <div class="modal-head">
@@ -320,6 +108,5 @@
       </div>
     </div>
   </div>
-
 </body>
 </html>
