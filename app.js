@@ -2136,27 +2136,63 @@ document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSub
 document.getElementById('tabLogin').addEventListener('click', () => { authMode = 'login'; updateAuthModal(); });
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
 
-initializeApp();
+bootAppSafely();
 /* --------------------------------------------------------------------------
-   Build 11 — Guided Opportunity Experience Enhancement Layer
-   Adds: shortlist, dedicated opportunity detail view, readiness check,
-   guided application wizard, in-app toasts, and richer youth dashboard flows.
+   Build 11 Safe Patch — Startup-safe guided opportunity experience
+   Goal:
+   - preserve Save / Detail / Readiness / Apply flow
+   - avoid startup crashes
+   - keep boot path resilient even if new SQL tables are not yet present
    -------------------------------------------------------------------------- */
 
 function ensureEnhancedState() {
   if (!demoState.shortlist) demoState.shortlist = { opportunities: [], courses: [] };
   if (!demoState.applicationDrafts) demoState.applicationDrafts = [];
-  if (!('selectedOpportunityId' in demoState)) demoState.selectedOpportunityId = null;
-  if (!('readinessCheck' in demoState)) demoState.readinessCheck = null;
-  if (!demoState.applicationWizard) demoState.applicationWizard = { opportunityId: null, step: 1, draftId: null, success: null };
-  if (!demoState.screeningQuestions) demoState.screeningQuestions = {};
-
+  if (!demoState.selectedOpportunityId) demoState.selectedOpportunityId = null;
+  if (!demoState.readinessCheck) demoState.readinessCheck = null;
+  if (!demoState.applicationWizard) {
+    demoState.applicationWizard = {
+      opportunityId: null,
+      step: 1,
+      success: null,
+      package: {
+        motivation: '',
+        cvReady: false,
+        coverReady: false,
+        evidenceReady: false,
+        screeningAnswers: {}
+      }
+    };
+  }
   if (!state.shortlist) state.shortlist = { opportunities: [], courses: [] };
   if (!Array.isArray(state.applicationDrafts)) state.applicationDrafts = [];
   if (!('selectedOpportunityId' in state)) state.selectedOpportunityId = null;
   if (!('readinessCheck' in state)) state.readinessCheck = null;
-  if (!state.applicationWizard) state.applicationWizard = { opportunityId: null, step: 1, draftId: null, success: null };
-  if (!state.screeningQuestions) state.screeningQuestions = {};
+  if (!state.applicationWizard) {
+    state.applicationWizard = {
+      opportunityId: null,
+      step: 1,
+      success: null,
+      package: {
+        motivation: '',
+        cvReady: false,
+        coverReady: false,
+        evidenceReady: false,
+        screeningAnswers: {}
+      }
+    };
+  }
+}
+
+function splitCsvSafe(value) {
+  return String(value || '').split(/[;,\n]/).map(item => item.trim()).filter(Boolean);
+}
+
+function safeAsync(fn, fallback = null) {
+  return Promise.resolve(fn()).catch(error => {
+    console.warn('Safe async warning:', error);
+    return fallback;
+  });
 }
 
 function ensureToastRoot() {
@@ -2164,7 +2200,14 @@ function ensureToastRoot() {
   if (!root) {
     root = document.createElement('div');
     root.id = 'toastRoot';
-    root.className = 'toast-root';
+    root.style.position = 'fixed';
+    root.style.top = '18px';
+    root.style.right = '18px';
+    root.style.zIndex = '10050';
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '10px';
+    root.style.pointerEvents = 'none';
     document.body.appendChild(root);
   }
   return root;
@@ -2173,18 +2216,44 @@ function ensureToastRoot() {
 function pushToast(message, tone = 'success') {
   const root = ensureToastRoot();
   const toast = document.createElement('div');
-  toast.className = `toast-card toast-${tone}`;
+  const border = tone === 'warning' ? '#edb42b' : tone === 'neutral' ? '#9aa6a2' : '#36702b';
+  toast.style.minWidth = '260px';
+  toast.style.maxWidth = '420px';
+  toast.style.padding = '14px 16px';
+  toast.style.background = 'white';
+  toast.style.border = `1px solid ${border}`;
+  toast.style.borderLeft = `5px solid ${border}`;
+  toast.style.borderRadius = '16px';
+  toast.style.boxShadow = '0 18px 38px rgba(30,43,31,.12)';
+  toast.style.opacity = '0';
+  toast.style.transform = 'translateY(-6px)';
+  toast.style.transition = '.24s ease';
+  toast.style.pointerEvents = 'none';
   toast.textContent = message;
   root.appendChild(toast);
-  setTimeout(() => toast.classList.add('toast-show'), 10);
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  });
   setTimeout(() => {
-    toast.classList.remove('toast-show');
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-6px)';
     setTimeout(() => toast.remove(), 260);
   }, 3200);
 }
 
-function splitCsv(value) {
-  return String(value || '').split(/[;,\n]/).map(item => item.trim()).filter(Boolean);
+function getOpportunityById(id) {
+  return (state.jobs || []).find(item => item.id === id) || null;
+}
+
+function getSavedOpportunityIds() {
+  ensureEnhancedState();
+  return new Set((state.shortlist.opportunities || []).map(item => item.opportunityId));
+}
+
+function getApplicationDraftByOpportunityId(opportunityId) {
+  ensureEnhancedState();
+  return (state.applicationDrafts || []).find(item => item.opportunityId === opportunityId) || null;
 }
 
 function readinessBand(score) {
@@ -2194,45 +2263,17 @@ function readinessBand(score) {
   return 'Early Stage';
 }
 
-function applicationStepLabels() {
-  return [
-    'Review opportunity',
-    'Readiness check',
-    'Application package',
-    'Screening questions',
-    'Confirm and submit'
-  ];
-}
-
-function getOpportunityById(id) {
-  return (state.jobs || []).find(item => item.id === id) || null;
-}
-
-function getSavedOpportunityIds() {
-  ensureEnhancedState();
-  return new Set((state.shortlist?.opportunities || []).map(item => item.opportunityId));
-}
-
-function getDraftByOpportunityId(opportunityId) {
-  ensureEnhancedState();
-  return (state.applicationDrafts || []).find(item => item.opportunityId === opportunityId) || null;
-}
-
-function youthApplicationCount() {
-  return Array.isArray(state.applications) ? state.applications.length : 0;
-}
-
 function calculateOpportunityReadiness(job) {
   const profile = state.profile || {};
-  const requiredSkills = splitCsv(job?.skills);
-  const profileSkills = new Set(splitCsv(profile.skills).map(item => item.toLowerCase()));
+  const requiredSkills = splitCsvSafe(job?.skills);
+  const profileSkills = new Set(splitCsvSafe(profile.skills).map(item => item.toLowerCase()));
   const matchedSkills = requiredSkills.filter(item => profileSkills.has(item.toLowerCase()));
   const missingSkills = requiredSkills.filter(item => !profileSkills.has(item.toLowerCase()));
   const completeness = youthProfileCompletion();
-  const educationMatch = profile.education && job?.education && profile.education === job.education;
-  const experienceMatch = profile.experience && job?.experience && profile.experience === job.experience;
-  const countryMatch = profile.country && job?.country && profile.country === job.country;
-  const regionMatch = profile.region && job?.region && profile.region.toLowerCase() === job.region.toLowerCase();
+  const educationMatch = !!(profile.education && job?.education && profile.education === job.education);
+  const experienceMatch = !!(profile.experience && job?.experience && profile.experience === job.experience);
+  const countryMatch = !!(profile.country && job?.country && profile.country === job.country);
+  const regionMatch = !!(profile.region && job?.region && String(profile.region).toLowerCase() === String(job.region).toLowerCase());
   const skillsScore = requiredSkills.length ? Math.round((matchedSkills.length / requiredSkills.length) * 34) : 22;
   const score = Math.min(98, Math.round(
     (completeness * 0.30) +
@@ -2246,37 +2287,27 @@ function calculateOpportunityReadiness(job) {
     {
       label: 'Profile completeness looks sufficient',
       passed: completeness >= 75,
-      detail: completeness >= 75
-        ? `Your profile is ${completeness}% complete.`
-        : `Your profile is ${completeness}% complete. Add more detail before submitting.`
+      detail: completeness >= 75 ? `Your profile is ${completeness}% complete.` : `Your profile is ${completeness}% complete. Add more detail before applying.`
     },
     {
       label: 'Education requirement appears aligned',
-      passed: !!educationMatch,
-      detail: educationMatch
-        ? `Your profile education matches ${job?.education || 'the stated requirement'}.`
-        : `This role expects ${job?.education || 'specific education details'}. Your current profile shows ${profile.education || 'no education selected yet'}.`
+      passed: educationMatch,
+      detail: educationMatch ? `Your education matches ${job?.education || 'the requirement'}.` : `This role requests ${job?.education || 'specific education details'}. Your current profile shows ${profile.education || 'no education selected yet'}.`
     },
     {
       label: 'Experience requirement appears aligned',
-      passed: !!experienceMatch,
-      detail: experienceMatch
-        ? `Your experience level matches ${job?.experience || 'the role requirement'}.`
-        : `This role expects ${job?.experience || 'specific experience details'}. Your current profile shows ${profile.experience || 'no experience level selected yet'}.`
+      passed: experienceMatch,
+      detail: experienceMatch ? `Your experience level matches ${job?.experience || 'the requirement'}.` : `This role expects ${job?.experience || 'specific experience details'}. Your current profile shows ${profile.experience || 'no experience level selected yet'}.`
     },
     {
       label: 'Location signal is aligned',
       passed: !!(countryMatch || regionMatch),
-      detail: countryMatch || regionMatch
-        ? `Your profile location aligns with ${job?.region || job?.country || 'the opportunity location'}.`
-        : `Your current location (${profile.region || profile.country || 'not yet set'}) may need confirmation for this role.`
+      detail: countryMatch || regionMatch ? `Your current location aligns with ${job?.region || job?.country || 'the opportunity location'}.` : `Your current location (${profile.region || profile.country || 'not yet set'}) may need confirmation for this role.`
     },
     {
       label: 'Core skills overlap is visible',
       passed: missingSkills.length <= Math.max(1, Math.floor(requiredSkills.length / 3)),
-      detail: matchedSkills.length
-        ? `You already match ${matchedSkills.length} of ${requiredSkills.length || 0} listed skills.`
-        : 'The platform cannot yet see strong overlap between your listed skills and this role.'
+      detail: matchedSkills.length ? `You already match ${matchedSkills.length} of ${requiredSkills.length || 0} listed skills.` : 'The platform cannot yet see strong overlap between your listed skills and this role.'
     }
   ];
   const nextActions = [];
@@ -2293,204 +2324,15 @@ function calculateOpportunityReadiness(job) {
     missingSkills,
     checklist,
     nextActions,
-    learningSignal: missingSkills.length
-      ? `Suggested upskilling focus: ${missingSkills.slice(0, 3).join(', ')}`
-      : 'Your current profile looks broadly aligned to this role.'
+    learningSignal: missingSkills.length ? `Suggested upskilling focus: ${missingSkills.slice(0, 3).join(', ')}` : 'Your current profile looks broadly aligned to this role.'
   };
-}
-
-function normalizeQuestions(raw) {
-  return (raw || []).map((item, index) => ({
-    id: item.id,
-    text: item.question_text || item.questionText || `Screening question ${index + 1}`,
-    type: item.question_type || item.questionType || 'Short Text',
-    optionsText: item.options_text || item.optionsText || '',
-    required: item.is_required !== false,
-    sortOrder: item.sort_order || item.sortOrder || (index + 1)
-  })).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-}
-
-async function loadSavedOpportunitiesFromSupabase() {
-  ensureEnhancedState();
-  state.shortlist.opportunities = [];
-  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
-  const { data, error } = await supabase
-    .from('saved_opportunities')
-    .select('id, opportunity_id, created_at')
-    .eq('user_id', currentUser.id)
-    .order('created_at', { ascending: false });
-  if (error) {
-    console.error('Error loading saved opportunities:', error);
-    return;
-  }
-  state.shortlist.opportunities = (data || []).map(item => ({
-    id: item.id,
-    opportunityId: item.opportunity_id,
-    createdAt: item.created_at
-  }));
-}
-
-async function loadApplicationDraftsFromSupabase() {
-  ensureEnhancedState();
-  state.applicationDrafts = [];
-  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
-  const { data, error } = await supabase
-    .from('opportunity_application_drafts')
-    .select('*')
-    .eq('applicant_id', currentUser.id)
-    .order('updated_at', { ascending: false });
-  if (error) {
-    console.warn('Application drafts load warning:', error);
-    return;
-  }
-  state.applicationDrafts = (data || []).map(item => ({
-    id: item.id,
-    opportunityId: item.opportunity_id,
-    currentStep: item.current_step || 1,
-    readinessScore: item.readiness_score || 0,
-    readinessBand: item.readiness_band || 'Early Stage',
-    readinessSummary: item.readiness_summary || {},
-    motivationNote: item.motivation_note || '',
-    documentState: item.document_state || {},
-    screeningAnswers: item.screening_answers || {},
-    draftPayload: item.draft_payload || {},
-    draftStatus: item.draft_status || 'In Progress',
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-    submittedAt: item.submitted_at || null
-  }));
-}
-
-async function ensureOpportunityQuestions(opportunityId) {
-  ensureEnhancedState();
-  if (state.screeningQuestions[opportunityId]) return state.screeningQuestions[opportunityId];
-  if (!isConfigured || !supabase) {
-    state.screeningQuestions[opportunityId] = [];
-    return [];
-  }
-  const { data, error } = await supabase
-    .from('opportunity_screening_questions')
-    .select('*')
-    .eq('opportunity_id', opportunityId)
-    .order('sort_order', { ascending: true });
-  if (error) {
-    console.warn('Opportunity questions load warning:', error);
-    state.screeningQuestions[opportunityId] = [];
-    return [];
-  }
-  const normalized = normalizeQuestions(data || []);
-  state.screeningQuestions[opportunityId] = normalized;
-  return normalized;
-}
-
-async function upsertOpportunityDraft(opportunityId, changes = {}) {
-  ensureEnhancedState();
-  if (!isConfigured || !supabase || !currentUser) return null;
-  const existing = getDraftByOpportunityId(opportunityId);
-  const readiness = changes.readinessSummary || existing?.readinessSummary || calculateOpportunityReadiness(getOpportunityById(opportunityId));
-  const payload = {
-    opportunity_id: opportunityId,
-    applicant_id: currentUser.id,
-    current_step: changes.currentStep || existing?.currentStep || state.applicationWizard.step || 1,
-    draft_status: changes.draftStatus || existing?.draftStatus || 'In Progress',
-    readiness_score: readiness?.score || existing?.readinessScore || 0,
-    readiness_band: readiness?.band || existing?.readinessBand || 'Early Stage',
-    readiness_summary: readiness,
-    motivation_note: changes.motivationNote !== undefined ? changes.motivationNote : (existing?.motivationNote || ''),
-    document_state: changes.documentState !== undefined ? changes.documentState : (existing?.documentState || {}),
-    screening_answers: changes.screeningAnswers !== undefined ? changes.screeningAnswers : (existing?.screeningAnswers || {}),
-    draft_payload: changes.draftPayload !== undefined ? changes.draftPayload : (existing?.draftPayload || {})
-  };
-  const { data, error } = await supabase
-    .from('opportunity_application_drafts')
-    .upsert([payload], { onConflict: 'opportunity_id,applicant_id' })
-    .select()
-    .single();
-  if (error) {
-    console.warn('Opportunity draft save warning:', error);
-    return null;
-  }
-  await loadApplicationDraftsFromSupabase();
-  state.applicationWizard.draftId = data?.id || getDraftByOpportunityId(opportunityId)?.id || null;
-  return data;
-}
-
-function collectWizardFormState(opportunityId) {
-  const existing = getDraftByOpportunityId(opportunityId);
-  const motivation = document.getElementById('applicationMotivation')?.value || existing?.motivationNote || '';
-  const documentState = {
-    cvReady: !!document.getElementById('docCvReady')?.checked,
-    coverNoteReady: !!document.getElementById('docCoverReady')?.checked,
-    evidenceReady: !!document.getElementById('docEvidenceReady')?.checked
-  };
-  const questions = state.screeningQuestions[opportunityId] || [];
-  const screeningAnswers = {};
-  questions.forEach(question => {
-    const input = document.getElementById(`screening_${question.id}`);
-    if (input) screeningAnswers[question.id] = input.value || '';
-  });
-  return {
-    motivationNote: motivation,
-    documentState,
-    screeningAnswers
-  };
-}
-
-function saveOpportunityLocally(opportunityId, savedId = null) {
-  ensureEnhancedState();
-  if (!state.shortlist.opportunities.some(item => item.opportunityId === opportunityId)) {
-    state.shortlist.opportunities.unshift({ id: savedId || `local-${opportunityId}`, opportunityId, createdAt: new Date().toISOString() });
-  }
-}
-
-function removeSavedOpportunityLocally(opportunityId) {
-  ensureEnhancedState();
-  state.shortlist.opportunities = (state.shortlist.opportunities || []).filter(item => item.opportunityId !== opportunityId);
-}
-
-async function saveOpportunityToSupabase(opportunityId) {
-  ensureEnhancedState();
-  if (!isConfigured || !supabase || !currentUser) return { ok: false, reason: 'auth' };
-  const { data, error } = await supabase
-    .from('saved_opportunities')
-    .upsert([{ user_id: currentUser.id, opportunity_id: opportunityId }], { onConflict: 'user_id,opportunity_id' })
-    .select('id, opportunity_id, created_at')
-    .single();
-  if (error) {
-    console.error('Save opportunity error:', error);
-    return { ok: false, reason: error.message || 'save_failed' };
-  }
-  saveOpportunityLocally(opportunityId, data?.id || null);
-  return { ok: true };
-}
-
-async function removeSavedOpportunityFromSupabase(opportunityId) {
-  ensureEnhancedState();
-  if (!isConfigured || !supabase || !currentUser) return { ok: false, reason: 'auth' };
-  const { error } = await supabase
-    .from('saved_opportunities')
-    .delete()
-    .eq('user_id', currentUser.id)
-    .eq('opportunity_id', opportunityId);
-  if (error) {
-    console.error('Remove saved opportunity error:', error);
-    return { ok: false, reason: error.message || 'remove_failed' };
-  }
-  removeSavedOpportunityLocally(opportunityId);
-  return { ok: true };
-}
-
-function fitClass(score) {
-  if (score >= 80) return 'readiness-strong';
-  if (score >= 60) return 'readiness-medium';
-  return 'readiness-emerging';
 }
 
 function renderOpportunityActionBar(job) {
   const saved = getSavedOpportunityIds().has(job.id);
-  const draft = getDraftByOpportunityId(job.id);
+  const draft = getApplicationDraftByOpportunityId(job.id);
   return `
-    <div class="opportunity-actions-row">
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
       <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(job.id)}')">${saved ? 'Saved to shortlist' : 'Save'}</button>
       <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">View details</button>
       <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(job.id)}')">Readiness check</button>
@@ -2499,63 +2341,12 @@ function renderOpportunityActionBar(job) {
   `;
 }
 
-function renderMetaPill(value, fallback = '') {
-  if (!String(value || '').trim()) return '';
-  return `<span class="pill">${escapeHtml(value || fallback)}</span>`;
-}
-
-function renderRichJobSkills(job) {
-  return splitCsv(job.skills).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('');
-}
-
-function renderRelatedOpportunities(currentJob) {
-  const related = (state.jobs || [])
-    .filter(item => item.id !== currentJob.id && item.status === 'Verified')
-    .sort((a, b) => matchScore(b) - matchScore(a))
-    .slice(0, 3);
-  if (!related.length) {
-    return `<div class="empty-card"><h4>No related opportunities yet</h4><p class="label">As more verified listings are published, related opportunities will appear here.</p></div>`;
-  }
-  return related.map(item => `
-    <div class="micro-opportunity-card">
-      <div>
-        <h4>${escapeHtml(item.title)}</h4>
-        <p class="label">${escapeHtml(item.org)} • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</p>
-      </div>
-      <div class="micro-opportunity-actions">
-        <span class="pill">${matchScore(item)}% fit</span>
-        <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(item.id)}')">Open</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderSuggestedTraining(readiness) {
-  const courses = (state.courses || []).filter(item => item.status === 'Verified').slice(0, 3);
-  if (!courses.length) {
-    return `<div class="empty-card"><h4>No suggested training yet</h4><p class="label">Verified courses will appear here when institutions publish aligned learning offers.</p></div>`;
-  }
-  return courses.map(course => `
-    <div class="mini-card pathway-recommendation-card">
-      <div class="mini-top">
-        ${statusBadge(course.status || 'Verified')}
-        <span class="pill">${escapeHtml(course.mode || 'Training')}</span>
-      </div>
-      <h4>${escapeHtml(course.title)}</h4>
-      <p class="label">${escapeHtml(course.provider)} • ${escapeHtml(course.duration || 'Flexible duration')}</p>
-      <p class="label">${escapeHtml(readiness.missingSkills.length ? 'Helpful for: ' + readiness.missingSkills.slice(0, 3).join(', ') : 'Broad relevance for this pathway.')}</p>
-    </div>
-  `).join('');
-}
-
 function jobCard(job, action) {
-  ensureEnhancedState();
   const score = matchScore(job);
   const status = job.status || 'Pending';
-  const isVerified = status === 'Verified';
   const saved = getSavedOpportunityIds().has(job.id);
-  const draft = getDraftByOpportunityId(job.id);
-  const trustNote = isVerified
+  const draft = getApplicationDraftByOpportunityId(job.id);
+  const trustNote = status === 'Verified'
     ? 'Verified listing visible to the public opportunity marketplace.'
     : status === 'Pending'
       ? 'Awaiting moderation before wider visibility.'
@@ -2563,7 +2354,7 @@ function jobCard(job, action) {
         ? 'This opportunity is no longer accepting active applications.'
         : 'Status updated through platform moderation.';
   return `
-    <div class="job ${isVerified ? 'job-verified' : ''}">
+    <div class="job ${status === 'Verified' ? 'job-verified' : ''}">
       <div>
         <div class="job-header-row">
           <div>
@@ -2573,376 +2364,83 @@ function jobCard(job, action) {
           <div class="job-badges">
             ${statusBadge(status)}
             ${saved ? '<span class="pill pill-verified">Saved</span>' : ''}
-            ${draft ? `<span class="pill pill-trust">Step ${escapeHtml(String(draft.currentStep || 1))} in progress</span>` : ''}
+            ${draft ? `<span class="pill pill-trust">Step ${escapeHtml(String(draft.step || 1))} in progress</span>` : ''}
           </div>
         </div>
         <p>${escapeHtml(job.desc || 'Role details will appear on the structured opportunity page.')}</p>
-        <div>${renderRichJobSkills(job)}</div>
+        <div>${splitCsvSafe(job.skills).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('')}</div>
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
         ${action ? renderOpportunityActionBar(job) : `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${statusBadge(status)}</div>`}
       </div>
-      <div class="fit ${fitClass(score)}" style="--score:${score}"><span>${score}%</span></div>
+      <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
   `;
 }
 
-function shortlistView() {
+async function loadSavedOpportunitiesSafe() {
   ensureEnhancedState();
-  const savedItems = (state.shortlist.opportunities || []).map(item => getOpportunityById(item.opportunityId)).filter(Boolean);
-  return `
-    <div class="grid">
-      <div class="card span-12 shortlist-hero">
-        <div>
-          <div class="kicker">My shortlist</div>
-          <h3>Saved opportunities for later review</h3>
-          <p class="label">Save keeps opportunities in your shortlist. Apply launches a guided application session with readiness support and structured steps.</p>
-        </div>
-        <div class="pathway-summary-row">
-          <span class="pathway-summary-item">${savedItems.length} saved opportunities</span>
-          <span class="pathway-summary-item">${state.applicationDrafts.length} applications in progress</span>
-          <button class="secondary" onclick="setView('opportunities')">Browse more opportunities</button>
-        </div>
-      </div>
-      <div class="card span-12">
-        <div class="section-title"><h3>Saved opportunities</h3><span class="pill pill-verified">Shortlist</span></div>
-        ${savedItems.length ? savedItems.map(item => `
-          <div class="shortlist-item-card">
-            <div>
-              <h4>${escapeHtml(item.title)}</h4>
-              <p class="label">${escapeHtml(item.org)} • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</p>
-              <div class="results-meta">
-                ${renderMetaPill(item.type)}
-                ${renderMetaPill(item.education)}
-                ${renderMetaPill(item.experience)}
-              </div>
-            </div>
-            <div class="shortlist-item-actions">
-              <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(item.id)}')">View details</button>
-              <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(item.id)}')">Readiness check</button>
-              <button class="primary" onclick="startOpportunityApplication('${escapeHtml(item.id)}')">${getDraftByOpportunityId(item.id) ? 'Continue applying' : 'Apply now'}</button>
-              <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(item.id)}')">Remove</button>
-            </div>
-          </div>
-        `).join('') : `<div class="empty-card"><h4>Your shortlist is empty</h4><p class="label">Save interesting opportunities first, then return here to compare, review and apply with more intention.</p><button class="secondary" onclick="setView('opportunities')">Explore opportunities</button></div>`}
-      </div>
-    </div>
-  `;
+  state.shortlist.opportunities = state.shortlist.opportunities || [];
+  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
+  const result = await safeAsync(() => supabase
+    .from('saved_opportunities')
+    .select('id, opportunity_id, created_at')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false }), null);
+  if (!result || result.error) return;
+  state.shortlist.opportunities = (result.data || []).map(item => ({
+    id: item.id,
+    opportunityId: item.opportunity_id,
+    createdAt: item.created_at
+  }));
 }
 
-function opportunityDetailView() {
+async function loadApplicationDraftsSafe() {
   ensureEnhancedState();
-  const job = getOpportunityById(state.selectedOpportunityId);
-  if (!job) {
-    return `<div class="grid"><div class="card span-12"><div class="empty-card"><h4>Opportunity not found</h4><p class="label">Return to the marketplace and open another verified opportunity.</p><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div></div></div>`;
-  }
-  const readiness = calculateOpportunityReadiness(job);
-  const saved = getSavedOpportunityIds().has(job.id);
-  return `
-    <div class="grid">
-      <div class="card span-12 opp-detail-hero">
-        <div class="opp-detail-main">
-          <div class="kicker">Opportunity detail</div>
-          <h3>${escapeHtml(job.title)}</h3>
-          <p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')} • ${escapeHtml(job.type || 'Opportunity')}</p>
-          <div class="results-meta">
-            ${statusBadge(job.status || 'Verified')}
-            ${saved ? '<span class="pill pill-verified">Saved to shortlist</span>' : '<span class="pill">Not yet saved</span>'}
-            ${renderMetaPill(job.workArrangement)}
-            ${renderMetaPill(job.duration)}
-            ${renderMetaPill(job.compensation)}
-            ${job.deadline ? `<span class="pill">Deadline ${escapeHtml(job.deadline)}</span>` : ''}
-          </div>
-          <p class="opp-detail-description">${escapeHtml(job.desc || 'Structured opportunity details will expand here as employers publish richer metadata.')}</p>
-          <div class="opportunity-actions-row">
-            <button class="secondary" onclick="setView('opportunities')">Back to marketplace</button>
-            <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(job.id)}')">${saved ? 'Remove from shortlist' : 'Save to shortlist'}</button>
-            <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(job.id)}')">Open readiness check</button>
-            <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">${getDraftByOpportunityId(job.id) ? 'Continue application' : 'Start guided application'}</button>
-          </div>
-        </div>
-        <div class="opp-detail-fit-rail">
-          <div class="fit ${fitClass(readiness.score)}" style="--score:${readiness.score}"><span>${readiness.score}%</span></div>
-          <div class="label" style="text-align:center;">${escapeHtml(readiness.band)} readiness</div>
-        </div>
-      </div>
-      <div class="card span-8">
-        <div class="section-title"><h3>About this role</h3><span class="pill pill-trust">Structured detail page</span></div>
-        <div class="opp-detail-grid">
-          <div class="detail-list-card">
-            <h4>Eligibility and role criteria</h4>
-            <ul>
-              <li><b>Education:</b> ${escapeHtml(job.education || 'Not specified')}</li>
-              <li><b>Experience:</b> ${escapeHtml(job.experience || 'Not specified')}</li>
-              <li><b>Required skills:</b> ${escapeHtml(job.skills || 'Not specified')}</li>
-              <li><b>Work arrangement:</b> ${escapeHtml(job.workArrangement || 'Not specified')}</li>
-              <li><b>Duration:</b> ${escapeHtml(job.duration || 'Not specified')}</li>
-            </ul>
-          </div>
-          <div class="detail-list-card">
-            <h4>What the applicant may gain</h4>
-            <p class="label">${escapeHtml(job.learningOutcomes || job.benefits || 'The employer has not yet published detailed learning outcomes or benefits for this opportunity.')}</p>
-            <h4 style="margin-top:16px;">Why this role matters</h4>
-            <p class="label">${escapeHtml(job.benefits || 'Use this opportunity page to communicate what the job offers beyond a vacancy title: exposure, practical learning, mentorship, income or pathway progression.')}</p>
-          </div>
-        </div>
-      </div>
-      <div class="card span-4">
-        <div class="section-title"><h3>Profile fit guidance</h3><span class="pill">Live</span></div>
-        <div class="fit-panel-list">
-          <div class="fit-panel-block"><b>${readiness.matchedSkills.length}</b><span class="label">criteria signals matched</span></div>
-          <div class="fit-panel-block"><b>${readiness.missingSkills.length}</b><span class="label">skills still missing</span></div>
-          <div class="fit-panel-block"><b>${readiness.completeness}%</b><span class="label">profile completeness</span></div>
-        </div>
-        <div class="soft-note" style="margin-top:12px;">${escapeHtml(readiness.learningSignal)}</div>
-        <div class="results-meta" style="margin-top:12px;">
-          ${(readiness.missingSkills.length ? readiness.missingSkills : ['No major skill gaps surfaced']).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('')}
-        </div>
-      </div>
-      <div class="card span-6">
-        <div class="section-title"><h3>Suggested training before or during application</h3><button class="secondary" onclick="setView('training')">See training catalogue</button></div>
-        ${renderSuggestedTraining(readiness)}
-      </div>
-      <div class="card span-6">
-        <div class="section-title"><h3>Related opportunities</h3><button class="secondary" onclick="setView('opportunities')">Browse all</button></div>
-        ${renderRelatedOpportunities(job)}
-      </div>
-    </div>
-  `;
+  state.applicationDrafts = state.applicationDrafts || [];
+  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
+  const result = await safeAsync(() => supabase
+    .from('opportunity_application_drafts')
+    .select('*')
+    .eq('applicant_id', currentUser.id)
+    .order('updated_at', { ascending: false }), null);
+  if (!result || result.error) return;
+  state.applicationDrafts = (result.data || []).map(item => ({
+    id: item.id,
+    opportunityId: item.opportunity_id,
+    step: item.current_step || 1,
+    status: item.draft_status || 'In Progress',
+    readiness: item.readiness_summary || {},
+    motivation: item.motivation_note || '',
+    packageState: item.document_state || {},
+    screeningAnswers: item.screening_answers || {}
+  }));
 }
 
-function readinessCheckView() {
+function navItems() {
   ensureEnhancedState();
-  const opportunityId = state.readinessCheck?.opportunityId || state.selectedOpportunityId;
-  const job = getOpportunityById(opportunityId);
-  const readiness = state.readinessCheck?.result || (job ? calculateOpportunityReadiness(job) : null);
-  if (!job || !readiness) return opportunityDetailView();
-  return `
-    <div class="grid">
-      <div class="card span-12 readiness-hero">
-        <div>
-          <div class="kicker">Readiness check</div>
-          <h3>${escapeHtml(job.title)}</h3>
-          <p class="label">This is where Save and Apply become meaningfully different: first understand how ready you are, then decide whether to proceed.</p>
-        </div>
-        <div class="readiness-score-hero ${fitClass(readiness.score)}">
-          <div class="metric">${readiness.score}%</div>
-          <div class="label">${escapeHtml(readiness.band)} readiness</div>
-        </div>
-      </div>
-      <div class="card span-8">
-        <div class="section-title"><h3>Self-assessment against listed criteria</h3><span class="pill pill-trust">Dynamic fit guidance</span></div>
-        <div class="criteria-check-list">
-          ${readiness.checklist.map(item => `
-            <div class="criteria-check-item ${item.passed ? 'criteria-check-pass' : 'criteria-check-watch'}">
-              <div class="criteria-check-state">${item.passed ? '✓' : '!'}</div>
-              <div>
-                <h4>${escapeHtml(item.label)}</h4>
-                <p class="label">${escapeHtml(item.detail)}</p>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      <div class="card span-4">
-        <div class="section-title"><h3>Next best actions</h3><span class="pill">Action path</span></div>
-        <div class="next-action-stack">
-          ${readiness.nextActions.map(action => `<div class="next-action-item">${escapeHtml(action)}</div>`).join('')}
-        </div>
-        <div class="soft-note" style="margin-top:14px;">${escapeHtml(readiness.learningSignal)}</div>
-        <div class="hero-actions" style="margin-top:14px;">
-          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Back to details</button>
-          <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">Proceed to guided application</button>
-        </div>
-      </div>
-    </div>
-  `;
+  if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'shortlist', 'training', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
-function renderScreeningInput(question, value) {
-  const safeId = `screening_${question.id}`;
-  if (question.type === 'Long Text') {
-    return `<textarea id="${safeId}" placeholder="Write your response here">${escapeHtml(value || '')}</textarea>`;
-  }
-  if (question.type === 'Yes/No') {
-    return `
-      <select id="${safeId}">
-        ${renderOptions(['Yes', 'No'], value || '', 'Select response')}
-      </select>
-    `;
-  }
-  if (question.type === 'Single Select') {
-    const options = splitCsv(question.optionsText || '').length ? splitCsv(question.optionsText || '') : ['Option 1', 'Option 2'];
-    return `<select id="${safeId}">${renderOptions(options, value || '', 'Select option')}</select>`;
-  }
-  return `<input id="${safeId}" value="${escapeHtml(value || '')}" placeholder="Write your response" />`;
-}
-
-function applicationWizardView() {
-  ensureEnhancedState();
-  const opportunityId = state.applicationWizard?.opportunityId || state.selectedOpportunityId;
-  const job = getOpportunityById(opportunityId);
-  if (!job) return opportunityDetailView();
-  const draft = getDraftByOpportunityId(opportunityId) || {};
-  const readiness = draft.readinessSummary || calculateOpportunityReadiness(job);
-  const step = Math.min(5, Math.max(1, Number(state.applicationWizard?.step || draft.currentStep || 1)));
-  const labels = applicationStepLabels();
-  const screeningQuestions = state.screeningQuestions[opportunityId] || [];
-  let body = '';
-  if (step === 1) {
-    body = `
-      <div class="wizard-pane-grid">
-        <div class="detail-list-card">
-          <h4>Review the opportunity first</h4>
-          <p class="label">Read the role carefully before committing to a full application session.</p>
-          <ul>
-            <li><b>Organisation:</b> ${escapeHtml(job.org)}</li>
-            <li><b>Location:</b> ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')}</li>
-            <li><b>Type:</b> ${escapeHtml(job.type || 'Opportunity')}</li>
-            <li><b>Required skills:</b> ${escapeHtml(job.skills || 'Not specified')}</li>
-          </ul>
-        </div>
-        <div class="detail-list-card">
-          <h4>Before you proceed</h4>
-          <p class="label">Use the next steps to assess your fit, prepare your package, respond to screening questions and only then submit formally.</p>
-          <div class="soft-note">This avoids the current shallow one-click behaviour and turns application into a more intentional session.</div>
-        </div>
-      </div>
-    `;
-  } else if (step === 2) {
-    body = `
-      <div class="wizard-pane-grid">
-        <div class="detail-list-card">
-          <h4>Your readiness score</h4>
-          <div class="wizard-score-shell ${fitClass(readiness.score)}">
-            <div class="metric">${readiness.score}%</div>
-            <div class="label">${escapeHtml(readiness.band)} readiness</div>
-          </div>
-          <div class="results-meta" style="margin-top:12px;">
-            ${(readiness.missingSkills.length ? readiness.missingSkills : ['No major skill gaps surfaced']).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('')}
-          </div>
-        </div>
-        <div class="detail-list-card">
-          <h4>Recommendation</h4>
-          <p class="label">${escapeHtml(readiness.nextActions[0] || 'Proceed carefully and make sure your application package is strong.')}</p>
-          <p class="label">${escapeHtml(readiness.learningSignal)}</p>
-        </div>
-      </div>
-    `;
-  } else if (step === 3) {
-    const documents = draft.documentState || {};
-    body = `
-      <div class="wizard-pane-grid">
-        <div class="detail-list-card">
-          <h4>Application package</h4>
-          <label class="full">Motivation note
-            <textarea id="applicationMotivation" placeholder="Why are you interested in this opportunity, and why are you a strong fit?">${escapeHtml(draft.motivationNote || '')}</textarea>
-          </label>
-        </div>
-        <div class="detail-list-card">
-          <h4>Readiness of your documents</h4>
-          <div class="check-toggle-list">
-            <label><input id="docCvReady" type="checkbox" ${documents.cvReady ? 'checked' : ''} /> My CV/resume is ready</label>
-            <label><input id="docCoverReady" type="checkbox" ${documents.coverNoteReady ? 'checked' : ''} /> My cover note or motivation statement is ready</label>
-            <label><input id="docEvidenceReady" type="checkbox" ${documents.evidenceReady ? 'checked' : ''} /> I have supporting evidence or references if requested</label>
-          </div>
-          <div class="soft-note">This step keeps the application session lively and reflective instead of instantly declaring success after one click.</div>
-        </div>
-      </div>
-    `;
-  } else if (step === 4) {
-    body = `
-      <div class="detail-list-card">
-        <h4>Screening questions</h4>
-        <p class="label">Employer-defined screening questions appear here if they exist. If none exist yet, the platform still records your application package and readiness state.</p>
-        ${screeningQuestions.length ? screeningQuestions.map(question => `
-          <div class="screening-question-card">
-            <label class="full">
-              ${escapeHtml(question.text)}${question.required ? ' *' : ''}
-              ${renderScreeningInput(question, draft.screeningAnswers?.[question.id] || '')}
-            </label>
-          </div>
-        `).join('') : `<div class="empty-card"><h4>No screening questions were configured for this opportunity</h4><p class="label">You can still continue to confirmation with your readiness summary and motivation note.</p></div>`}
-      </div>
-    `;
-  } else {
-    const packageSummary = collectWizardFormState(opportunityId);
-    const answeredCount = Object.values(packageSummary.screeningAnswers || {}).filter(value => String(value || '').trim()).length;
-    body = `
-      <div class="wizard-pane-grid">
-        <div class="detail-list-card">
-          <h4>Final review</h4>
-          <ul>
-            <li><b>Opportunity:</b> ${escapeHtml(job.title)}</li>
-            <li><b>Readiness score:</b> ${escapeHtml(String(readiness.score || 0))}% (${escapeHtml(readiness.band || 'Early Stage')})</li>
-            <li><b>Motivation note prepared:</b> ${packageSummary.motivationNote.trim() ? 'Yes' : 'No'}</li>
-            <li><b>Document package ready:</b> ${(packageSummary.documentState.cvReady || packageSummary.documentState.coverNoteReady || packageSummary.documentState.evidenceReady) ? 'Partly or fully ready' : 'Not yet confirmed'}</li>
-            <li><b>Screening questions answered:</b> ${answeredCount}</li>
-          </ul>
-        </div>
-        <div class="detail-list-card">
-          <h4>What happens after submission</h4>
-          <p class="label">The application will move to <b>Submitted</b>, the opportunity will remain visible in your dashboard history, and this wizard draft will be marked as submitted.</p>
-          <div class="soft-note">This is the moment where Apply becomes a deliberate final action rather than a premature one-click popup.</div>
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <div class="grid">
-      <div class="card span-12 wizard-shell-card">
-        <div class="section-title">
-          <div>
-            <div class="kicker">Guided application session</div>
-            <h3>${escapeHtml(job.title)}</h3>
-            <p class="label">Step ${step} of 5 — ${escapeHtml(labels[step - 1])}</p>
-          </div>
-          <div class="results-meta">
-            ${statusBadge(draft.draftStatus || 'In Progress')}
-            <span class="pill">Readiness ${escapeHtml(String(readiness.score || 0))}%</span>
-          </div>
-        </div>
-        <div class="wizard-steps-row">
-          ${labels.map((label, index) => `<div class="wizard-step-chip ${index + 1 === step ? 'active' : ''} ${index + 1 < step ? 'complete' : ''}"><span>${index + 1}</span><b>${escapeHtml(label)}</b></div>`).join('')}
-        </div>
-        <div class="wizard-stage-panel">
-          ${body}
-        </div>
-        <div class="wizard-footer-actions">
-          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Exit to details</button>
-          <div class="wizard-footer-main-actions">
-            ${step > 1 ? `<button class="secondary" onclick="changeApplicationStep(-1)">Back</button>` : ''}
-            ${step < 5 ? `<button class="primary" onclick="changeApplicationStep(1)">Save and continue</button>` : `<button class="primary" onclick="submitOpportunityApplication()">Submit application</button>`}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function applicationSuccessView() {
-  ensureEnhancedState();
-  const success = state.applicationWizard?.success || null;
-  if (!success) return opportunities();
-  return `
-    <div class="grid">
-      <div class="card span-12 application-success-shell">
-        <div class="success-icon">✓</div>
-        <div class="kicker">Application submitted</div>
-        <h3>${escapeHtml(success.title || 'Application submitted successfully')}</h3>
-        <p class="label">${escapeHtml(success.message || 'Your guided application was submitted and tracked successfully.')}</p>
-        <div class="pathway-summary-row" style="justify-content:center;">
-          <span class="pathway-summary-item">Opportunity ${escapeHtml(success.opportunityTitle || '')}</span>
-          <span class="pathway-summary-item">Status Submitted</span>
-          <span class="pathway-summary-item">Readiness ${escapeHtml(String(success.readinessScore || 0))}%</span>
-        </div>
-        <div class="hero-actions" style="justify-content:center; margin-top:18px;">
-          <button class="secondary" onclick="setView('dashboard')">Return to dashboard</button>
-          <button class="secondary" onclick="setView('shortlist')">Go to shortlist</button>
-          <button class="primary" onclick="setView('opportunities')">Browse more opportunities</button>
-        </div>
-      </div>
-    </div>
-  `;
+function desc() {
+  if (state.view === 'home') return 'Discover verified youth opportunities, training pathways and trusted partners across Africa.';
+  if (state.view === 'shortlist') return 'Review saved opportunities, compare them deliberately and launch guided applications when you are ready.';
+  if (state.view === 'opportunity detail') return 'Structured opportunity page with trust, fit guidance, suggested training and richer action panels.';
+  if (state.view === 'readiness check') return 'Run a self-assessment against listed criteria before deciding whether to apply.';
+  if (state.view === 'application wizard') return 'A true guided application session with structured steps instead of one-click submission.';
+  if (state.view === 'application success') return 'Your guided application has been submitted and tracked successfully.';
+  if (state.view === 'about') return 'Learn what Jobs4Youth is, who it serves, and why it exists.';
+  if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
+  if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
+  if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
+  if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
+  if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
+  if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
+  if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
+  return 'Verify partners, monitor activity and generate labour market intelligence.';
 }
 
 function youthDash() {
@@ -2950,11 +2448,11 @@ function youthDash() {
   const ranked = [...state.jobs].filter(item => item.status === 'Verified').sort((a, b) => matchScore(b) - matchScore(a));
   const completion = youthProfileCompletion();
   const savedCount = state.shortlist.opportunities.length;
-  const inProgressCount = state.applicationDrafts.filter(item => item.draftStatus !== 'Submitted').length;
-  const submittedCount = youthApplicationCount();
+  const inProgressCount = state.applicationDrafts.filter(item => item.status !== 'Submitted').length;
+  const submittedCount = Array.isArray(state.applications) ? state.applications.length : 0;
   return `
     ${onboardingPanel()}
-    <div class="notice"><b>Guided product upgrade:</b> Save now stores opportunities in your shortlist, View Details opens a structured opportunity page, Readiness Check runs a self-assessment, and Apply launches a real guided session.</div>
+    <div class="notice"><b>Guided product upgrade:</b> Save now sends opportunities to your shortlist, View Details opens a structured page, Readiness Check runs a self-assessment, and Apply launches a real guided session.</div>
     <div class="grid" style="margin-top:18px;">
       <div class="card span-3"><div class="label">Profile completeness</div><div class="metric">${completion}%</div><div class="label">Improve this to strengthen readiness and relevance.</div></div>
       <div class="card span-3"><div class="label">Saved opportunities</div><div class="metric">${savedCount}</div><div class="label">Your shortlist for later comparison and action.</div></div>
@@ -2969,11 +2467,10 @@ function youthDash() {
       </div>
       <div class="card span-4">
         <div class="section-title"><h3>Current action path</h3><span class="pill pill-trust">Lively workflow</span></div>
-        <div class="next-action-stack">
-          <div class="next-action-item">1. Save promising roles to your shortlist.</div>
-          <div class="next-action-item">2. Open details and review what the opportunity really offers.</div>
-          <div class="next-action-item">3. Run your readiness check before applying.</div>
-          <div class="next-action-item">4. Complete the guided application session instead of one-click submission.</div>
+        <div class="mini-grid single-column">
+          <div class="mini-card"><h4>1. Save promising roles</h4><p class="label">Shortlist opportunities you want to compare later.</p></div>
+          <div class="mini-card"><h4>2. Open details and readiness</h4><p class="label">Review the role and understand how ready you are.</p></div>
+          <div class="mini-card"><h4>3. Apply through a session</h4><p class="label">Complete a guided multi-step apply experience instead of one click.</p></div>
         </div>
       </div>
     </div>
@@ -3000,25 +2497,18 @@ function opportunities() {
   `;
   return `
     <div class="grid">
-      <div class="card span-12 browse-hero-card">
-        <div>
-          <div class="kicker">Dynamic opportunity marketplace</div>
-          <h3>Explore, save, assess, then apply</h3>
-          <p class="label">The marketplace is no longer limited to a static list. Each opportunity now supports a shortlist action, a rich detail page, a readiness check and a guided application session.</p>
-        </div>
-        <div class="pathway-summary-row">
-          <span class="pathway-summary-item">${list.length} visible result${list.length === 1 ? '' : 's'}</span>
-          <span class="pathway-summary-item">${state.shortlist.opportunities.length} saved</span>
-          <span class="pathway-summary-item">${state.applicationDrafts.length} in progress</span>
-        </div>
+      <div class="card span-12">
+        <div class="kicker">Dynamic opportunity marketplace</div>
+        <h3 style="margin-top:8px;">Explore, save, assess, then apply</h3>
+        <p class="label">Each opportunity now supports a shortlist action, a structured detail view, a readiness check and a guided application session.</p>
       </div>
       <div class="card span-12">
-        ${filtersPanel('Search the opportunity marketplace', 'Filter by keyword, country, location, type and requirements, then move from static browse to live guided action.', controls, 'clearOpportunityFilters')}
+        ${filtersPanel('Search the opportunity marketplace', 'Filter by keyword, country, location, type and requirements, then move from static browse to guided action.', controls, 'clearOpportunityFilters')}
         <div class="results-meta">
-          <span class="pill pill-verified">Verified and visible listings only</span>
+          <span class="pill pill-verified">${list.length} result${list.length === 1 ? '' : 's'}</span>
           <span class="pill pill-trust">Shortlist + readiness + guided apply enabled</span>
         </div>
-        <div class="notice trust-notice"><b>Experience upgrade:</b> Save keeps opportunities for later, while Apply starts a proper application journey. They are now treated as different actions.</div>
+        <div class="notice trust-notice"><b>Experience upgrade:</b> Save keeps opportunities for later, while Apply starts a structured application journey.</div>
         <div style="margin-top:14px;">
           ${list.length ? list.map(item => jobCard(item, true)).join('') : `
             <div class="empty-card">
@@ -3036,194 +2526,262 @@ function opportunities() {
   `;
 }
 
-function navItems() {
+function shortlistView() {
   ensureEnhancedState();
-  if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'shortlist', 'training', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  const savedItems = (state.shortlist.opportunities || []).map(item => getOpportunityById(item.opportunityId)).filter(Boolean);
+  return `
+    <div class="grid">
+      <div class="card span-12">
+        <div class="kicker">My shortlist</div>
+        <h3 style="margin-top:8px;">Saved opportunities for later review</h3>
+        <p class="label">Save keeps opportunities in your shortlist. Apply launches a guided application session with readiness support and structured steps.</p>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>Saved opportunities</h3><span class="pill pill-verified">Shortlist</span></div>
+        ${savedItems.length ? savedItems.map(item => `
+          <div class="job">
+            <div>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p><b>${escapeHtml(item.org)}</b> • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</p>
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(item.id)}')">View details</button>
+                <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(item.id)}')">Readiness check</button>
+                <button class="primary" onclick="startOpportunityApplication('${escapeHtml(item.id)}')">${getApplicationDraftByOpportunityId(item.id) ? 'Continue applying' : 'Apply now'}</button>
+                <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(item.id)}')">Remove</button>
+              </div>
+            </div>
+            <div class="fit" style="--score:${matchScore(item)}"><span>${matchScore(item)}%</span></div>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>Your shortlist is empty</h4><p class="label">Save interesting opportunities first, then return here to compare, review and apply with more intention.</p><button class="secondary" onclick="setView('opportunities')">Explore opportunities</button></div>`}
+      </div>
+    </div>
+  `;
 }
 
-function desc() {
-  if (state.view === 'home') return 'Discover verified youth opportunities, training pathways and trusted partners across Africa.';
-  if (state.view === 'shortlist') return 'Review saved opportunities, compare them deliberately and launch guided applications when you are ready.';
-  if (state.view === 'opportunity detail') return 'Structured opportunity page with trust, fit, suggested training and richer employer detail.';
-  if (state.view === 'readiness check') return 'Run a self-assessment before deciding whether to apply.';
-  if (state.view === 'application wizard') return 'A true guided application session with structured steps instead of one-click submission.';
-  if (state.view === 'application success') return 'Your guided application has been submitted and tracked successfully.';
-  if (state.view === 'about') return 'Learn what Jobs4Youth is, who it serves, and why it exists.';
-  if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
-  if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
-  if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
-  if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
-  if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
-  if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
-  if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
-  return 'Verify partners, monitor activity and generate labour market intelligence.';
-}
-
-async function loadJobsFromSupabase() {
-  if (!isConfigured || !supabase) return;
-  const { data, error } = await supabase.from('opportunities').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error('Error loading jobs:', error);
-    return;
-  }
-  state.jobs = (data || []).map(job => ({
-    id: job.id,
-    title: job.title || 'No title',
-    org: job.organization_name || 'Unknown organisation',
-    country: job.country || '',
-    region: job.region || '',
-    type: job.opportunity_type || '',
-    skills: job.required_skills || '',
-    education: job.education_requirement || '',
-    experience: job.experience_requirement || '',
-    status: job.status || 'Pending',
-    desc: job.description || '',
-    postedBy: job.posted_by || null,
-    deadline: job.deadline || '',
-    compensation: job.compensation || '',
-    workArrangement: job.work_arrangement || '',
-    duration: job.duration || '',
-    benefits: job.benefits || '',
-    learningOutcomes: job.learning_outcomes || ''
-  }));
-}
-
-async function loadApplicationsFromSupabase() {
+function opportunityDetailView() {
   ensureEnhancedState();
-  state.applications = [];
-  state.employerCandidates = [];
-  if (!isConfigured || !currentUser || !supabase) return;
-  if (state.role === 'youth') {
-    const { data, error } = await supabase
-      .from('applications')
-      .select('id, opportunity_id, application_status, created_at')
-      .eq('applicant_id', currentUser.id)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading youth applications:', error);
-      return;
-    }
-    state.applications = (data || []).map(item => ({
-      id: item.id,
-      opportunityId: item.opportunity_id,
-      status: item.application_status || 'Submitted',
-      createdAt: item.created_at
-    }));
-    return;
+  const job = getOpportunityById(state.selectedOpportunityId);
+  if (!job) {
+    return `<div class="grid"><div class="card span-12"><div class="empty-card"><h4>Opportunity not found</h4><p class="label">Return to the marketplace and open another verified opportunity.</p><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div></div></div>`;
   }
-  if (state.role === 'employer' || state.role === 'admin') {
-    const { data: myOpps, error: oppError } = await supabase.from('opportunities').select('id,title').eq('posted_by', currentUser.id);
-    if (oppError) {
-      console.error('Error loading employer opportunities:', oppError);
-      return;
-    }
-    const opportunityIds = (myOpps || []).map(item => item.id);
-    if (!opportunityIds.length) return;
-    const { data: apps, error: appError } = await supabase
-      .from('applications')
-      .select('id, opportunity_id, applicant_id, application_status, created_at')
-      .in('opportunity_id', opportunityIds)
-      .order('created_at', { ascending: false });
-    if (appError) {
-      console.error('Error loading employer applications:', appError);
-      return;
-    }
-    const applicantIds = [...new Set((apps || []).map(item => item.applicant_id).filter(Boolean))];
-    let profileMap = {};
-    if (applicantIds.length) {
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, country, region, skills, education, experience_level')
-        .in('id', applicantIds);
-      if (!profileError) profileMap = Object.fromEntries((profiles || []).map(item => [item.id, item]));
-    }
-    const oppMap = Object.fromEntries((myOpps || []).map(item => [item.id, item]));
-    state.employerCandidates = (apps || []).map(item => ({
-      id: item.id,
-      opportunityTitle: oppMap[item.opportunity_id]?.title || 'Opportunity',
-      applicantName: profileMap[item.applicant_id]?.full_name || 'Applicant',
-      applicantEmail: profileMap[item.applicant_id]?.email || '',
-      country: profileMap[item.applicant_id]?.country || '',
-      region: profileMap[item.applicant_id]?.region || '',
-      skills: profileMap[item.applicant_id]?.skills || '',
-      education: profileMap[item.applicant_id]?.education || '',
-      experience: profileMap[item.applicant_id]?.experience_level || '',
-      status: item.application_status || 'Submitted'
-    }));
-  }
+  const readiness = calculateOpportunityReadiness(job);
+  const saved = getSavedOpportunityIds().has(job.id);
+  const related = (state.jobs || []).filter(item => item.id !== job.id && item.status === 'Verified').slice(0, 3);
+  const suggestedCourses = (state.courses || []).filter(item => item.status === 'Verified').slice(0, 3);
+  return `
+    <div class="grid">
+      <div class="card span-12"
+           style="background:linear-gradient(135deg,#f6fbef,#ffffff);">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Opportunity detail</div>
+            <h3>${escapeHtml(job.title)}</h3>
+            <p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')} • ${escapeHtml(job.type || 'Opportunity')}</p>
+          </div>
+          <div class="fit" style="--score:${readiness.score}"><span>${readiness.score}%</span></div>
+        </div>
+        <div class="results-meta">
+          ${statusBadge(job.status || 'Verified')}
+          ${saved ? '<span class="pill pill-verified">Saved to shortlist</span>' : '<span class="pill">Not yet saved</span>'}
+          ${job.compensation ? `<span class="pill">${escapeHtml(job.compensation)}</span>` : ''}
+          ${job.duration ? `<span class="pill">${escapeHtml(job.duration)}</span>` : ''}
+        </div>
+        <p class="label" style="margin-top:12px;line-height:1.8;">${escapeHtml(job.desc || 'Structured opportunity details will expand here as employers publish richer metadata.')}</p>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="secondary" onclick="setView('opportunities')">Back to marketplace</button>
+          <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(job.id)}')">${saved ? 'Remove from shortlist' : 'Save to shortlist'}</button>
+          <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(job.id)}')">Open readiness check</button>
+          <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">${getApplicationDraftByOpportunityId(job.id) ? 'Continue application' : 'Start guided application'}</button>
+        </div>
+      </div>
+      <div class="card span-8">
+        <div class="section-title"><h3>About this role</h3><span class="pill pill-trust">Structured detail page</span></div>
+        <p class="label"><b>Education:</b> ${escapeHtml(job.education || 'Not specified')}</p>
+        <p class="label"><b>Experience:</b> ${escapeHtml(job.experience || 'Not specified')}</p>
+        <p class="label"><b>Required skills:</b> ${escapeHtml(job.skills || 'Not specified')}</p>
+        <p class="label"><b>What the applicant may gain:</b> ${escapeHtml(job.learningOutcomes || job.benefits || 'The employer has not yet published detailed learning outcomes or benefits for this opportunity.')}</p>
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Profile fit guidance</h3><span class="pill">Live</span></div>
+        <p class="label"><b>${readiness.matchedSkills.length}</b> criteria signals matched</p>
+        <p class="label"><b>${readiness.missingSkills.length}</b> skills still missing</p>
+        <p class="label"><b>${readiness.completeness}%</b> profile completeness</p>
+        <div class="soft-note" style="margin-top:12px;">${escapeHtml(readiness.learningSignal)}</div>
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Suggested training</h3><button class="secondary" onclick="setView('training')">See training catalogue</button></div>
+        ${suggestedCourses.length ? suggestedCourses.map(course => `<p><b>${escapeHtml(course.title)}</b><br><span class="label">${escapeHtml(course.provider)} • ${escapeHtml(course.mode || 'Training')}</span></p>`).join('') : `<div class="empty-card"><h4>No suggested training yet</h4><p class="label">Verified courses will appear here when institutions publish aligned learning offers.</p></div>`}
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Related opportunities</h3><button class="secondary" onclick="setView('opportunities')">Browse all</button></div>
+        ${related.length ? related.map(item => `<p><b>${escapeHtml(item.title)}</b><br><span class="label">${escapeHtml(item.org)} • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</span></p>`).join('') : `<div class="empty-card"><h4>No related opportunities yet</h4><p class="label">As more verified listings are published, related opportunities will appear here.</p></div>`}
+      </div>
+    </div>
+  `;
 }
 
-async function handleAuthSubmit() {
-  if (!isConfigured) {
-    pushToast('Add config.js with your Supabase URL and anon key first.', 'warning');
-    return;
-  }
-  const email = document.getElementById('authEmail').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
-  const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
-  const fullName = document.getElementById('authFullName').value.trim();
-  const role = document.getElementById('authRole').value;
-  const msg = document.getElementById('authMessage');
-  msg.textContent = '';
-  if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
-  if (authMode === 'signup' && password !== confirmPassword) { msg.textContent = 'Passwords do not match.'; return; }
-  let authResult;
-  try {
-    authResult = authMode === 'signup'
-      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role } } })
-      : await supabase.auth.signInWithPassword({ email, password });
-  } catch (networkError) {
-    console.error('Signup/signin network error:', networkError);
-    msg.textContent = networkError?.message || networkError?.name || 'Network error while contacting Supabase.';
-    return;
-  }
-  if (authResult.error) {
-    console.error('Auth error full object:', authResult.error);
-    msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
-    return;
-  }
-  if (authMode === 'signup' && !authResult.data.session) {
-    closeAuthModal();
-    openAuthSuccessModal(
-      'Confirm your email to conclude sign up',
-      'Your account has been created successfully. Please open your email and click the confirmation link before signing in to Jobs4Youth.'
-    );
-    return;
-  }
-  currentUser = authResult.data.session?.user || authResult.data.user || null;
-  if (currentUser) {
-    const profile = await ensureProfile(currentUser);
-    syncProfileToState(profile);
-  }
-  await loadJobsFromSupabase();
-  await loadCoursesFromSupabase();
-  await loadApplicationsFromSupabase();
-  await loadSavedOpportunitiesFromSupabase();
-  await loadApplicationDraftsFromSupabase();
-  await loadSignalLayerFromSupabase();
-  await loadVerificationQueueFromSupabase();
-  await loadVerificationDocumentsFromSupabase();
-  await loadNotificationsFromSupabase();
-  closeAuthModal();
-  state.view = 'dashboard';
-  pushToast(authMode === 'signup' ? 'Account created successfully.' : 'Signed in successfully.');
-  render();
-}
-
-async function signOut() {
-  if (isConfigured && supabase) await supabase.auth.signOut();
-  currentUser = null;
-  state = structuredClone(demoState);
+function readinessCheckView() {
   ensureEnhancedState();
-  browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
-  browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
-  state.view = 'home';
-  render();
-  pushToast('Signed out.', 'neutral');
+  const opportunityId = state.readinessCheck?.opportunityId || state.selectedOpportunityId;
+  const job = getOpportunityById(opportunityId);
+  const readiness = state.readinessCheck?.result || (job ? calculateOpportunityReadiness(job) : null);
+  if (!job || !readiness) return opportunityDetailView();
+  return `
+    <div class="grid">
+      <div class="card span-12" style="background:linear-gradient(135deg,#f6fbef,#ffffff);display:flex;justify-content:space-between;gap:18px;align-items:center;">
+        <div>
+          <div class="kicker">Readiness check</div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="label">This is where Save and Apply become meaningfully different: first understand how ready you are, then decide whether to proceed.</p>
+        </div>
+        <div style="min-width:180px;text-align:center;">
+          <div class="metric">${readiness.score}%</div>
+          <div class="label">${escapeHtml(readiness.band)} readiness</div>
+        </div>
+      </div>
+      <div class="card span-8">
+        <div class="section-title"><h3>Self-assessment against listed criteria</h3><span class="pill pill-trust">Dynamic fit guidance</span></div>
+        ${readiness.checklist.map(item => `
+          <div class="mini-card">
+            <h4>${item.passed ? '✓' : '!'} ${escapeHtml(item.label)}</h4>
+            <p class="label">${escapeHtml(item.detail)}</p>
+          </div>
+        `).join('')}
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Next best actions</h3><span class="pill">Action path</span></div>
+        ${readiness.nextActions.map(item => `<div class="mini-card"><p class="label">${escapeHtml(item)}</p></div>`).join('')}
+        <div class="hero-actions" style="margin-top:14px;">
+          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Back to details</button>
+          <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">Proceed to guided application</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function applicationStepLabels() {
+  return ['Review opportunity','Readiness check','Application package','Screening questions','Confirm and submit'];
+}
+
+function currentWizardPackage() {
+  ensureEnhancedState();
+  return state.applicationWizard.package || {
+    motivation: '',
+    cvReady: false,
+    coverReady: false,
+    evidenceReady: false,
+    screeningAnswers: {}
+  };
+}
+
+function applicationWizardView() {
+  ensureEnhancedState();
+  const opportunityId = state.applicationWizard.opportunityId || state.selectedOpportunityId;
+  const job = getOpportunityById(opportunityId);
+  if (!job) return opportunityDetailView();
+  const readiness = calculateOpportunityReadiness(job);
+  const step = Math.max(1, Math.min(5, Number(state.applicationWizard.step || 1)));
+  const labels = applicationStepLabels();
+  const pkg = currentWizardPackage();
+  let body = '';
+  if (step == 1) {
+    body = `
+      <div class="mini-grid single-column">
+        <div class="mini-card"><h4>Review the opportunity first</h4><p class="label">Organisation: ${escapeHtml(job.org)} • Location: ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')} • Type: ${escapeHtml(job.type || 'Opportunity')}</p></div>
+        <div class="mini-card"><h4>Why this is now different</h4><p class="label">This journey avoids shallow one-click submission and turns Apply into a deliberate session.</p></div>
+      </div>
+    `;
+  } else if (step == 2) {
+    body = `
+      <div class="mini-grid single-column">
+        <div class="mini-card"><h4>Your readiness score</h4><p class="metric" style="font-size:40px;">${readiness.score}%</p><p class="label">${escapeHtml(readiness.band)} readiness</p></div>
+        <div class="mini-card"><h4>Recommendation</h4><p class="label">${escapeHtml(readiness.nextActions[0] || 'Proceed carefully and make sure your application package is strong.')}</p></div>
+      </div>
+    `;
+  } else if (step == 3) {
+    body = `
+      <div class="form">
+        <label class="full">Motivation note
+          <textarea id="applicationMotivation" placeholder="Why are you interested in this opportunity, and why are you a strong fit?">${escapeHtml(pkg.motivation || '')}</textarea>
+        </label>
+        <label><input id="docCvReady" type="checkbox" ${pkg.cvReady ? 'checked' : ''}/> CV/resume is ready</label>
+        <label><input id="docCoverReady" type="checkbox" ${pkg.coverReady ? 'checked' : ''}/> Cover note is ready</label>
+        <label class="full"><input id="docEvidenceReady" type="checkbox" ${pkg.evidenceReady ? 'checked' : ''}/> Supporting evidence or references are ready if requested</label>
+      </div>
+    `;
+  } else if (step == 4) {
+    body = `
+      <div class="mini-grid single-column">
+        <div class="mini-card">
+          <h4>Screening questions</h4>
+          <p class="label">These are generic screening prompts for now. Employer-configured questions can later plug into the same step.</p>
+        </div>
+        <label class="full">Why are you interested in this role?
+          <textarea id="screening_interest" placeholder="Write your response here">${escapeHtml(pkg.screeningAnswers?.interest || '')}</textarea>
+        </label>
+        <label class="full">What makes you a good fit for the role?
+          <textarea id="screening_fit" placeholder="Write your response here">${escapeHtml(pkg.screeningAnswers?.fit || '')}</textarea>
+        </label>
+        <label class="full">Are you available to start within the role timeline?
+          <select id="screening_availability">${renderOptions(['Yes','No'], pkg.screeningAnswers?.availability || '', 'Select response')}</select>
+        </label>
+      </div>
+    `;
+  } else {
+    body = `
+      <div class="mini-grid single-column">
+        <div class="mini-card"><h4>Final review</h4><p class="label">Opportunity: ${escapeHtml(job.title)} • Readiness score: ${readiness.score}% • Motivation note prepared: ${pkg.motivation?.trim() ? 'Yes' : 'No'}</p></div>
+        <div class="mini-card"><h4>What happens after submission</h4><p class="label">The application will move to Submitted, and the opportunity will remain visible in your dashboard history.</p></div>
+      </div>
+    `;
+  }
+  return `
+    <div class="grid">
+      <div class="card span-12" style="background:linear-gradient(135deg,#f6fbef,#ffffff);">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Guided application session</div>
+            <h3>${escapeHtml(job.title)}</h3>
+            <p class="label">Step ${step} of 5 — ${escapeHtml(labels[step - 1])}</p>
+          </div>
+          <div class="results-meta"><span class="pill">Readiness ${readiness.score}%</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:18px;">
+          ${labels.map((label, index) => `<div class="mini-card" style="background:${index + 1 === step ? '#f4faee' : '#fbfdf8'};"><h4>${index + 1}</h4><p class="label">${escapeHtml(label)}</p></div>`).join('')}
+        </div>
+        <div style="margin-top:18px;">${body}</div>
+        <div style="margin-top:18px;display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;">
+          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Exit to details</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            ${step > 1 ? `<button class="secondary" onclick="changeApplicationStep(-1)">Back</button>` : ''}
+            ${step < 5 ? `<button class="primary" onclick="changeApplicationStep(1)">Save and continue</button>` : `<button class="primary" onclick="submitOpportunityApplication()">Submit application</button>`}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function applicationSuccessView() {
+  ensureEnhancedState();
+  const success = state.applicationWizard.success || null;
+  if (!success) return opportunities();
+  return `
+    <div class="grid">
+      <div class="card span-12" style="background:linear-gradient(135deg,#f6fbef,#ffffff);text-align:center;padding:34px;">
+        <div class="success-icon">✓</div>
+        <div class="kicker">Application submitted</div>
+        <h3>${escapeHtml(success.title || 'Application submitted successfully')}</h3>
+        <p class="label">${escapeHtml(success.message || 'Your guided application was submitted and tracked successfully.')}</p>
+        <div class="hero-actions" style="justify-content:center;margin-top:18px;">
+          <button class="secondary" onclick="setView('dashboard')">Return to dashboard</button>
+          <button class="secondary" onclick="setView('shortlist')">Go to shortlist</button>
+          <button class="primary" onclick="setView('opportunities')">Browse more opportunities</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 window.toggleOpportunitySave = async function(opportunityId) {
@@ -3239,22 +2797,26 @@ window.toggleOpportunitySave = async function(opportunityId) {
     return;
   }
   const saved = getSavedOpportunityIds().has(opportunityId);
-  const result = saved
-    ? await removeSavedOpportunityFromSupabase(opportunityId)
-    : await saveOpportunityToSupabase(opportunityId);
-  if (!result.ok) {
-    pushToast(saved ? 'Unable to remove this opportunity from shortlist.' : 'Unable to save this opportunity right now.', 'warning');
-    return;
+  if (saved) {
+    state.shortlist.opportunities = state.shortlist.opportunities.filter(item => item.opportunityId !== opportunityId);
+    if (isConfigured && supabase) {
+      await safeAsync(() => supabase.from('saved_opportunities').delete().eq('user_id', currentUser.id).eq('opportunity_id', opportunityId));
+    }
+    pushToast('Removed from shortlist.', 'neutral');
+  } else {
+    state.shortlist.opportunities.unshift({ id: `local-${opportunityId}`, opportunityId, createdAt: new Date().toISOString() });
+    if (isConfigured && supabase) {
+      await safeAsync(() => supabase.from('saved_opportunities').upsert([{ user_id: currentUser.id, opportunity_id: opportunityId }], { onConflict: 'user_id,opportunity_id' }));
+    }
+    pushToast('Saved to shortlist.');
   }
   render();
-  pushToast(saved ? 'Removed from shortlist.' : 'Saved to shortlist.');
 };
 
-window.viewOpportunityDetail = async function(opportunityId) {
+window.viewOpportunityDetail = function(opportunityId) {
   ensureEnhancedState();
   state.selectedOpportunityId = opportunityId;
   state.view = 'opportunity detail';
-  await ensureOpportunityQuestions(opportunityId);
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -3279,8 +2841,31 @@ window.runOpportunityReadiness = async function(opportunityId) {
   const readiness = calculateOpportunityReadiness(job);
   state.selectedOpportunityId = opportunityId;
   state.readinessCheck = { opportunityId, result: readiness };
+  const existing = getApplicationDraftByOpportunityId(opportunityId);
+  if (!existing) {
+    state.applicationDrafts.unshift({
+      id: `draft-${opportunityId}`,
+      opportunityId,
+      step: 2,
+      status: 'In Progress',
+      readiness,
+      motivation: '',
+      packageState: {},
+      screeningAnswers: {}
+    });
+  }
+  if (isConfigured && supabase && currentUser) {
+    await safeAsync(() => supabase.from('opportunity_application_drafts').upsert([{
+      opportunity_id: opportunityId,
+      applicant_id: currentUser.id,
+      current_step: 2,
+      draft_status: 'In Progress',
+      readiness_score: readiness.score,
+      readiness_band: readiness.band,
+      readiness_summary: readiness
+    }], { onConflict: 'opportunity_id,applicant_id' }));
+  }
   state.view = 'readiness check';
-  await upsertOpportunityDraft(opportunityId, { currentStep: 2, readinessSummary: readiness });
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -3302,147 +2887,183 @@ window.startOpportunityApplication = async function(opportunityId) {
     pushToast('Opportunity not found.', 'warning');
     return;
   }
-  await ensureOpportunityQuestions(opportunityId);
-  const readiness = calculateOpportunityReadiness(job);
-  const existing = getDraftByOpportunityId(opportunityId);
+  const existing = getApplicationDraftByOpportunityId(opportunityId);
   state.selectedOpportunityId = opportunityId;
-  state.applicationWizard = {
-    opportunityId,
-    step: existing?.currentStep || 1,
-    draftId: existing?.id || null,
-    success: null
+  state.applicationWizard.opportunityId = opportunityId;
+  state.applicationWizard.step = existing?.step || 1;
+  state.applicationWizard.success = null;
+  state.applicationWizard.package = {
+    motivation: existing?.motivation || '',
+    cvReady: !!existing?.packageState?.cvReady,
+    coverReady: !!existing?.packageState?.coverReady,
+    evidenceReady: !!existing?.packageState?.evidenceReady,
+    screeningAnswers: existing?.screeningAnswers || {}
   };
-  await upsertOpportunityDraft(opportunityId, {
-    currentStep: existing?.currentStep || 1,
-    readinessSummary: readiness,
-    draftStatus: existing?.draftStatus || 'In Progress'
-  });
+  if (!existing) {
+    state.applicationDrafts.unshift({
+      id: `draft-${opportunityId}`,
+      opportunityId,
+      step: 1,
+      status: 'In Progress',
+      readiness: calculateOpportunityReadiness(job),
+      motivation: '',
+      packageState: {},
+      screeningAnswers: {}
+    });
+  }
   state.view = 'application wizard';
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-window.changeApplicationStep = async function(direction) {
+function persistCurrentWizardInputs() {
+  const pkg = currentWizardPackage();
+  const motivationEl = document.getElementById('applicationMotivation');
+  if (motivationEl) pkg.motivation = motivationEl.value || '';
+  const cvEl = document.getElementById('docCvReady');
+  const coverEl = document.getElementById('docCoverReady');
+  const evidenceEl = document.getElementById('docEvidenceReady');
+  if (cvEl) pkg.cvReady = !!cvEl.checked;
+  if (coverEl) pkg.coverReady = !!coverEl.checked;
+  if (evidenceEl) pkg.evidenceReady = !!evidenceEl.checked;
+  const interestEl = document.getElementById('screening_interest');
+  const fitEl = document.getElementById('screening_fit');
+  const availEl = document.getElementById('screening_availability');
+  if (interestEl || fitEl || availEl) {
+    pkg.screeningAnswers = {
+      interest: interestEl?.value || '',
+      fit: fitEl?.value || '',
+      availability: availEl?.value || ''
+    };
+  }
+  state.applicationWizard.package = pkg;
+  const draft = getApplicationDraftByOpportunityId(state.applicationWizard.opportunityId);
+  if (draft) {
+    draft.motivation = pkg.motivation;
+    draft.packageState = {
+      cvReady: pkg.cvReady,
+      coverReady: pkg.coverReady,
+      evidenceReady: pkg.evidenceReady
+    };
+    draft.screeningAnswers = pkg.screeningAnswers;
+    draft.step = state.applicationWizard.step;
+  }
+}
+
+window.changeApplicationStep = async function(delta) {
   ensureEnhancedState();
-  const opportunityId = state.applicationWizard?.opportunityId;
+  const opportunityId = state.applicationWizard.opportunityId;
   if (!opportunityId) return;
-  let step = Number(state.applicationWizard.step || 1);
-  const packageState = collectWizardFormState(opportunityId);
-  const job = getOpportunityById(opportunityId);
-  const readiness = calculateOpportunityReadiness(job);
-  if (direction > 0 && step === 3 && !packageState.motivationNote.trim()) {
+  persistCurrentWizardInputs();
+  const nextStep = Math.max(1, Math.min(5, Number(state.applicationWizard.step || 1) + delta));
+  if (delta > 0 && state.applicationWizard.step === 3 && !String(state.applicationWizard.package.motivation || '').trim()) {
     pushToast('Add a short motivation note before you continue.', 'warning');
     return;
   }
-  if (direction > 0 && step === 4) {
-    const questions = state.screeningQuestions[opportunityId] || [];
-    const missingRequired = questions.some(question => question.required && !String(packageState.screeningAnswers?.[question.id] || '').trim());
-    if (missingRequired) {
-      pushToast('Please answer all required screening questions before continuing.', 'warning');
+  if (delta > 0 && state.applicationWizard.step === 4) {
+    const answers = state.applicationWizard.package.screeningAnswers || {};
+    if (!String(answers.interest || '').trim() || !String(answers.fit || '').trim() || !String(answers.availability || '').trim()) {
+      pushToast('Please respond to the screening prompts before continuing.', 'warning');
       return;
     }
   }
-  step = Math.min(5, Math.max(1, step + direction));
-  state.applicationWizard.step = step;
-  await upsertOpportunityDraft(opportunityId, {
-    currentStep: step,
-    draftStatus: step >= 5 ? 'Ready to Submit' : 'In Progress',
-    readinessSummary: readiness,
-    motivationNote: packageState.motivationNote,
-    documentState: packageState.documentState,
-    screeningAnswers: packageState.screeningAnswers,
-    draftPayload: {
-      profileName: state.profile.name || '',
-      updatedAt: new Date().toISOString()
-    }
-  });
+  state.applicationWizard.step = nextStep;
+  const draft = getApplicationDraftByOpportunityId(opportunityId);
+  if (draft) draft.step = nextStep;
+  if (isConfigured && supabase && currentUser) {
+    const readiness = calculateOpportunityReadiness(getOpportunityById(opportunityId));
+    await safeAsync(() => supabase.from('opportunity_application_drafts').upsert([{
+      opportunity_id: opportunityId,
+      applicant_id: currentUser.id,
+      current_step: nextStep,
+      draft_status: nextStep >= 5 ? 'Ready to Submit' : 'In Progress',
+      readiness_score: readiness.score,
+      readiness_band: readiness.band,
+      readiness_summary: readiness,
+      motivation_note: state.applicationWizard.package.motivation || '',
+      document_state: {
+        cvReady: !!state.applicationWizard.package.cvReady,
+        coverReady: !!state.applicationWizard.package.coverReady,
+        evidenceReady: !!state.applicationWizard.package.evidenceReady
+      },
+      screening_answers: state.applicationWizard.package.screeningAnswers || {}
+    }], { onConflict: 'opportunity_id,applicant_id' }));
+  }
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.submitOpportunityApplication = async function() {
   ensureEnhancedState();
-  const opportunityId = state.applicationWizard?.opportunityId;
-  if (!opportunityId || !currentUser || !supabase) return;
-  const job = getOpportunityById(opportunityId);
-  const readiness = calculateOpportunityReadiness(job);
-  const packageState = collectWizardFormState(opportunityId);
-  if (!packageState.motivationNote.trim()) {
+  const opportunityId = state.applicationWizard.opportunityId;
+  if (!opportunityId || !currentUser || !supabase) {
+    pushToast('Please sign in first before submitting.', 'warning');
+    return;
+  }
+  persistCurrentWizardInputs();
+  const motivation = String(state.applicationWizard.package.motivation || '').trim();
+  if (!motivation) {
     pushToast('Add a motivation note before submitting.', 'warning');
     return;
   }
-  let applicationRecord = null;
-  let applicationError = null;
-  const existingApplication = (state.applications || []).find(item => item.opportunityId === opportunityId);
-  if (existingApplication?.id) {
-    const update = await supabase
-      .from('applications')
-      .update({ application_status: 'Submitted' })
-      .eq('id', existingApplication.id)
-      .eq('applicant_id', currentUser.id)
-      .select()
-      .single();
-    applicationRecord = update.data;
-    applicationError = update.error;
+  const job = getOpportunityById(opportunityId);
+  const readiness = calculateOpportunityReadiness(job);
+  let applicationId = null;
+  const existing = Array.isArray(state.applications) ? state.applications.find(item => (typeof item === 'object' ? item.opportunityId === opportunityId : item === opportunityId)) : null;
+  if (existing && existing.id) {
+    const updateResult = await safeAsync(() => supabase.from('applications').update({ application_status: 'Submitted' }).eq('id', existing.id).eq('applicant_id', currentUser.id).select().single(), null);
+    applicationId = updateResult?.data?.id || existing.id;
   } else {
-    const insert = await supabase
-      .from('applications')
-      .insert([{ opportunity_id: opportunityId, applicant_id: currentUser.id, application_status: 'Submitted' }])
-      .select()
-      .single();
-    applicationRecord = insert.data;
-    applicationError = insert.error;
-    if (applicationError && (applicationError.code === '23505' || String(applicationError.message || '').toLowerCase().includes('duplicate'))) {
-      const fallback = await supabase
-        .from('applications')
-        .update({ application_status: 'Submitted' })
-        .eq('opportunity_id', opportunityId)
-        .eq('applicant_id', currentUser.id)
-        .select()
-        .single();
-      applicationRecord = fallback.data;
-      applicationError = fallback.error;
+    const insertResult = await safeAsync(() => supabase.from('applications').insert([{ opportunity_id: opportunityId, applicant_id: currentUser.id, application_status: 'Submitted' }]).select().single(), null);
+    if (insertResult?.error && (insertResult.error.code === '23505' || String(insertResult.error.message || '').toLowerCase().includes('duplicate'))) {
+      const fallback = await safeAsync(() => supabase.from('applications').select('id').eq('opportunity_id', opportunityId).eq('applicant_id', currentUser.id).maybeSingle(), null);
+      applicationId = fallback?.data?.id || null;
+    } else {
+      applicationId = insertResult?.data?.id || null;
     }
   }
-  if (applicationError) {
-    console.error('Application submission error:', applicationError);
-    pushToast(`Unable to submit the application: ${applicationError.message || 'unknown error'}`, 'warning');
+  if (!applicationId) {
+    pushToast('Unable to submit the application right now.', 'warning');
     return;
   }
-  if (applicationRecord?.id) {
-    const payloadInsert = await supabase
-      .from('application_submission_payloads')
-      .upsert([{
-        application_id: applicationRecord.id,
-        draft_id: state.applicationWizard.draftId || null,
-        opportunity_id: opportunityId,
-        applicant_id: currentUser.id,
-        readiness_score: readiness.score,
-        readiness_band: readiness.band,
-        readiness_summary: readiness,
-        motivation_note: packageState.motivationNote,
-        document_state: packageState.documentState,
-        screening_answers: packageState.screeningAnswers,
-        submitted_at: new Date().toISOString()
-      }], { onConflict: 'application_id' });
-    if (payloadInsert.error) console.warn('Application submission payload warning:', payloadInsert.error);
-  }
-  await upsertOpportunityDraft(opportunityId, {
-    currentStep: 5,
-    draftStatus: 'Submitted',
-    readinessSummary: readiness,
-    motivationNote: packageState.motivationNote,
-    documentState: packageState.documentState,
-    screeningAnswers: packageState.screeningAnswers,
-    draftPayload: { submittedAt: new Date().toISOString() }
-  });
+  await safeAsync(() => supabase.from('application_submission_payloads').upsert([{
+    application_id: applicationId,
+    opportunity_id: opportunityId,
+    applicant_id: currentUser.id,
+    readiness_score: readiness.score,
+    readiness_band: readiness.band,
+    readiness_summary: readiness,
+    motivation_note: motivation,
+    document_state: {
+      cvReady: !!state.applicationWizard.package.cvReady,
+      coverReady: !!state.applicationWizard.package.coverReady,
+      evidenceReady: !!state.applicationWizard.package.evidenceReady
+    },
+    screening_answers: state.applicationWizard.package.screeningAnswers || {},
+    submitted_at: new Date().toISOString()
+  }], { onConflict: 'application_id' }));
+  await safeAsync(() => supabase.from('opportunity_application_drafts').upsert([{
+    opportunity_id: opportunityId,
+    applicant_id: currentUser.id,
+    current_step: 5,
+    draft_status: 'Submitted',
+    readiness_score: readiness.score,
+    readiness_band: readiness.band,
+    readiness_summary: readiness,
+    motivation_note: motivation,
+    document_state: {
+      cvReady: !!state.applicationWizard.package.cvReady,
+      coverReady: !!state.applicationWizard.package.coverReady,
+      evidenceReady: !!state.applicationWizard.package.evidenceReady
+    },
+    screening_answers: state.applicationWizard.package.screeningAnswers || {},
+    submitted_at: new Date().toISOString()
+  }], { onConflict: 'opportunity_id,applicant_id' }));
   await loadApplicationsFromSupabase();
-  await loadApplicationDraftsFromSupabase();
+  await loadApplicationDraftsSafe();
   state.applicationWizard.success = {
     title: 'Your application has been submitted',
-    message: 'You reviewed the opportunity, assessed your fit, prepared your package and completed the guided application session successfully.',
-    readinessScore: readiness.score,
-    opportunityTitle: job?.title || 'Opportunity'
+    message: 'You reviewed the opportunity, assessed your fit, prepared your package and completed the guided session successfully.'
   };
   state.view = 'application success';
   render();
@@ -3453,6 +3074,96 @@ window.submitOpportunityApplication = async function() {
 window.applyJob = async function(opportunityId) {
   await window.startOpportunityApplication(opportunityId);
 };
+
+async function loadJobsFromSupabase() {
+  if (!isConfigured || !supabase) return;
+  const { data, error } = await supabase.from('opportunities').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error loading jobs:', error);
+    return;
+  }
+  state.jobs = (data || []).map(job => ({
+    id: job.id,
+    title: job.title || 'No title',
+    org: job.organization_name || 'Unknown org',
+    country: job.country || '',
+    region: job.region || '',
+    type: job.opportunity_type || '',
+    skills: job.required_skills || '',
+    education: job.education_requirement || '',
+    experience: job.experience_requirement || '',
+    status: job.status || 'Pending',
+    desc: job.description || '',
+    postedBy: job.posted_by || null,
+    deadline: job.deadline || null,
+    compensation: job.compensation || '',
+    workArrangement: job.work_arrangement || '',
+    duration: job.duration || '',
+    benefits: job.benefits || '',
+    learningOutcomes: job.learning_outcomes || ''
+  }));
+}
+
+async function loadApplicationsFromSupabase() {
+  ensureEnhancedState();
+  state.applications = [];
+  state.employerCandidates = [];
+  if (!isConfigured || !currentUser || !supabase) return;
+  if (state.role === 'youth') {
+    const { data, error } = await supabase.from('applications').select('id, opportunity_id, application_status, created_at').eq('applicant_id', currentUser.id).order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading youth applications:', error);
+      return;
+    }
+    state.applications = (data || []).map(item => ({
+      id: item.id,
+      opportunityId: item.opportunity_id,
+      status: item.application_status || 'Submitted',
+      createdAt: item.created_at
+    }));
+    return;
+  }
+  if (state.role === 'employer' || state.role === 'admin') {
+    const { data: myOpps, error: oppError } = await supabase.from('opportunities').select('id,title').eq('posted_by', currentUser.id);
+    if (oppError) {
+      console.error('Error loading employer opportunities:', oppError);
+      return;
+    }
+    const opportunityIds = (myOpps || []).map(o => o.id);
+    if (!opportunityIds.length) return;
+    const { data: apps, error: appError } = await supabase
+      .from('applications')
+      .select('id, opportunity_id, applicant_id, application_status, created_at')
+      .in('opportunity_id', opportunityIds)
+      .order('created_at', { ascending: false });
+    if (appError) {
+      console.error('Error loading employer applications:', appError);
+      return;
+    }
+    const applicantIds = [...new Set((apps || []).map(a => a.applicant_id).filter(Boolean))];
+    let profileMap = {};
+    if (applicantIds.length) {
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, country, region, skills, education, experience_level')
+        .in('id', applicantIds);
+      if (!profileError) profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    }
+    const oppMap = Object.fromEntries((myOpps || []).map(o => [o.id, o]));
+    state.employerCandidates = (apps || []).map(a => ({
+      id: a.id,
+      opportunityTitle: oppMap[a.opportunity_id]?.title || 'Opportunity',
+      applicantName: profileMap[a.applicant_id]?.full_name || 'Applicant',
+      applicantEmail: profileMap[a.applicant_id]?.email || '',
+      country: profileMap[a.applicant_id]?.country || '',
+      region: profileMap[a.applicant_id]?.region || '',
+      skills: profileMap[a.applicant_id]?.skills || '',
+      education: profileMap[a.applicant_id]?.education || '',
+      experience: profileMap[a.applicant_id]?.experience_level || '',
+      status: a.application_status || 'Submitted'
+    }));
+  }
+}
 
 function render() {
   ensureEnhancedState();
@@ -3481,77 +3192,38 @@ function render() {
   } else if (state.role === 'admin') {
     c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
   }
-  document.getElementById('content').innerHTML = c;
+  const contentEl = document.getElementById('content');
+  if (contentEl) contentEl.innerHTML = c;
 }
-
-window.saveProfile = async function () {
-  if (!isConfigured || !supabase) { pushToast('Supabase not connected.', 'warning'); return; }
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (userError || !user) { pushToast('Please sign in first.', 'warning'); return; }
-  const updates = {
-    full_name: document.getElementById('profileName')?.value || '',
-    country: document.getElementById('profileCountry')?.value || '',
-    region: document.getElementById('profileRegion')?.value || '',
-    education: document.getElementById('profileEducation')?.value || '',
-    availability: document.getElementById('profileAvailability')?.value || '',
-    experience_level: document.getElementById('profileExperience')?.value || '',
-    skills: document.getElementById('profileSkills')?.value || '',
-    interests: document.getElementById('profileInterests')?.value || '',
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-  if (error) { pushToast(`Failed to save profile: ${error.message}`, 'warning'); return; }
-  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
-  render();
-  pushToast('Profile saved successfully.');
-};
-
-window.saveOrganizationProfile = async function () {
-  if (!isConfigured || !supabase) { pushToast('Supabase not connected.', 'warning'); return; }
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (userError || !user) { pushToast('Please sign in first.', 'warning'); return; }
-  const updates = {
-    full_name: document.getElementById('orgProfileName')?.value || '',
-    organization_name: document.getElementById('orgName')?.value || '',
-    sector: document.getElementById('orgSector')?.value || '',
-    country: document.getElementById('orgCountry')?.value || '',
-    region: document.getElementById('orgRegion')?.value || '',
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-  if (error) { pushToast(`Failed to save organisation profile: ${error.message}`, 'warning'); return; }
-  state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
-  render();
-  pushToast('Organisation profile saved successfully.');
-};
 
 async function initializeApp() {
   ensureEnhancedState();
   state.view = 'home';
   if (isConfigured && supabase) {
-    const { data: sessionData, error } = await supabase.auth.getSession();
-    if (!error && sessionData?.session?.user) {
-      currentUser = sessionData.session.user;
-      const profile = await ensureProfile(currentUser);
-      syncProfileToState(profile);
-      state.view = 'dashboard';
-    }
-    await loadJobsFromSupabase();
-    await loadCoursesFromSupabase();
-    await loadApplicationsFromSupabase();
-    await loadSavedOpportunitiesFromSupabase();
-    await loadApplicationDraftsFromSupabase();
-    await loadSignalLayerFromSupabase();
-    await loadVerificationQueueFromSupabase();
-    await loadVerificationDocumentsFromSupabase();
-    await loadNotificationsFromSupabase();
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      currentUser = session?.user || null;
-      if (currentUser) {
-        const profile = await ensureProfile(currentUser);
+    const sessionResult = await safeAsync(() => supabase.auth.getSession(), { data: { session: null }, error: null });
+    const session = sessionResult?.data?.session || null;
+    if (session?.user) {
+      currentUser = session.user;
+      const profile = await safeAsync(() => ensureProfile(currentUser), null);
+      if (profile) {
         syncProfileToState(profile);
+        state.view = 'dashboard';
+      }
+    }
+    await safeAsync(() => loadJobsFromSupabase());
+    await safeAsync(() => loadCoursesFromSupabase());
+    await safeAsync(() => loadApplicationsFromSupabase());
+    await safeAsync(() => loadSavedOpportunitiesSafe());
+    await safeAsync(() => loadApplicationDraftsSafe());
+    await safeAsync(() => loadSignalLayerFromSupabase());
+    await safeAsync(() => loadVerificationQueueFromSupabase());
+    await safeAsync(() => loadVerificationDocumentsFromSupabase());
+    await safeAsync(() => loadNotificationsFromSupabase());
+    safeAsync(() => supabase.auth.onAuthStateChange(async (_event, sessionChange) => {
+      currentUser = sessionChange?.user || null;
+      if (currentUser) {
+        const profile = await safeAsync(() => ensureProfile(currentUser), null);
+        if (profile) syncProfileToState(profile);
         ensureEnhancedState();
         state.view = 'dashboard';
       } else {
@@ -3561,17 +3233,70 @@ async function initializeApp() {
         browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
         state.view = 'home';
       }
-      await loadJobsFromSupabase();
-      await loadCoursesFromSupabase();
-      await loadApplicationsFromSupabase();
-      await loadSavedOpportunitiesFromSupabase();
-      await loadApplicationDraftsFromSupabase();
-      await loadSignalLayerFromSupabase();
-      await loadVerificationQueueFromSupabase();
-      await loadVerificationDocumentsFromSupabase();
-      await loadNotificationsFromSupabase();
+      await safeAsync(() => loadJobsFromSupabase());
+      await safeAsync(() => loadCoursesFromSupabase());
+      await safeAsync(() => loadApplicationsFromSupabase());
+      await safeAsync(() => loadSavedOpportunitiesSafe());
+      await safeAsync(() => loadApplicationDraftsSafe());
+      await safeAsync(() => loadSignalLayerFromSupabase());
+      await safeAsync(() => loadVerificationQueueFromSupabase());
+      await safeAsync(() => loadVerificationDocumentsFromSupabase());
+      await safeAsync(() => loadNotificationsFromSupabase());
       render();
-    });
+    }));
   }
   render();
+}
+
+function attachCoreHandlersSafely() {
+  const signIn = document.getElementById('btnSignIn');
+  const signOut = document.getElementById('btnSignOut');
+  const closeModal = document.getElementById('closeAuthModal');
+  const submitAuth = document.getElementById('authSubmitBtn');
+  const tabLogin = document.getElementById('tabLogin');
+  const tabSignup = document.getElementById('tabSignup');
+  if (signIn) signIn.onclick = () => openAuthModal('login');
+  if (signOut) signOut.onclick = () => signOutUserSafe();
+  if (closeModal) closeModal.onclick = () => closeAuthModal();
+  if (submitAuth) submitAuth.onclick = () => handleAuthSubmit();
+  if (tabLogin) tabLogin.onclick = () => { authMode = 'login'; updateAuthModal(); };
+  if (tabSignup) tabSignup.onclick = () => { authMode = 'signup'; updateAuthModal(); };
+}
+
+async function signOutUserSafe() {
+  try {
+    await signOut();
+    pushToast('Signed out.', 'neutral');
+  } catch (error) {
+    console.error('Safe sign out error:', error);
+    currentUser = null;
+    state = structuredClone(demoState);
+    ensureEnhancedState();
+    state.view = 'home';
+    render();
+  }
+}
+
+async function bootAppSafely() {
+  attachCoreHandlersSafely();
+  try {
+    await initializeApp();
+  } catch (error) {
+    console.error('Boot error:', error);
+    currentUser = null;
+    state = structuredClone(demoState);
+    ensureEnhancedState();
+    state.view = 'home';
+    attachCoreHandlersSafely();
+    try {
+      render();
+    } catch (renderError) {
+      console.error('Render fallback error:', renderError);
+      const contentEl = document.getElementById('content');
+      if (contentEl) {
+        contentEl.innerHTML = `<div class="card"><h3>Platform recovered into safe mode</h3><p class="label">The app encountered a startup problem, but the sign-in flow is still available. Please open the browser console for details or redeploy the latest patched app.js.</p></div>`;
+      }
+    }
+    pushToast('Platform loaded in safe mode. You can still use Sign in.', 'warning');
+  }
 }
