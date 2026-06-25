@@ -2137,3 +2137,1441 @@ document.getElementById('tabLogin').addEventListener('click', () => { authMode =
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
 
 initializeApp();
+/* --------------------------------------------------------------------------
+   Build 11 — Guided Opportunity Experience Enhancement Layer
+   Adds: shortlist, dedicated opportunity detail view, readiness check,
+   guided application wizard, in-app toasts, and richer youth dashboard flows.
+   -------------------------------------------------------------------------- */
+
+function ensureEnhancedState() {
+  if (!demoState.shortlist) demoState.shortlist = { opportunities: [], courses: [] };
+  if (!demoState.applicationDrafts) demoState.applicationDrafts = [];
+  if (!('selectedOpportunityId' in demoState)) demoState.selectedOpportunityId = null;
+  if (!('readinessCheck' in demoState)) demoState.readinessCheck = null;
+  if (!demoState.applicationWizard) demoState.applicationWizard = { opportunityId: null, step: 1, draftId: null, success: null };
+  if (!demoState.screeningQuestions) demoState.screeningQuestions = {};
+
+  if (!state.shortlist) state.shortlist = { opportunities: [], courses: [] };
+  if (!Array.isArray(state.applicationDrafts)) state.applicationDrafts = [];
+  if (!('selectedOpportunityId' in state)) state.selectedOpportunityId = null;
+  if (!('readinessCheck' in state)) state.readinessCheck = null;
+  if (!state.applicationWizard) state.applicationWizard = { opportunityId: null, step: 1, draftId: null, success: null };
+  if (!state.screeningQuestions) state.screeningQuestions = {};
+}
+
+function ensureToastRoot() {
+  let root = document.getElementById('toastRoot');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'toastRoot';
+    root.className = 'toast-root';
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function pushToast(message, tone = 'success') {
+  const root = ensureToastRoot();
+  const toast = document.createElement('div');
+  toast.className = `toast-card toast-${tone}`;
+  toast.textContent = message;
+  root.appendChild(toast);
+  setTimeout(() => toast.classList.add('toast-show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('toast-show');
+    setTimeout(() => toast.remove(), 260);
+  }, 3200);
+}
+
+function splitCsv(value) {
+  return String(value || '').split(/[;,\n]/).map(item => item.trim()).filter(Boolean);
+}
+
+function readinessBand(score) {
+  if (score >= 80) return 'Strong';
+  if (score >= 60) return 'Progressing';
+  if (score >= 40) return 'Emerging';
+  return 'Early Stage';
+}
+
+function applicationStepLabels() {
+  return [
+    'Review opportunity',
+    'Readiness check',
+    'Application package',
+    'Screening questions',
+    'Confirm and submit'
+  ];
+}
+
+function getOpportunityById(id) {
+  return (state.jobs || []).find(item => item.id === id) || null;
+}
+
+function getSavedOpportunityIds() {
+  ensureEnhancedState();
+  return new Set((state.shortlist?.opportunities || []).map(item => item.opportunityId));
+}
+
+function getDraftByOpportunityId(opportunityId) {
+  ensureEnhancedState();
+  return (state.applicationDrafts || []).find(item => item.opportunityId === opportunityId) || null;
+}
+
+function youthApplicationCount() {
+  return Array.isArray(state.applications) ? state.applications.length : 0;
+}
+
+function calculateOpportunityReadiness(job) {
+  const profile = state.profile || {};
+  const requiredSkills = splitCsv(job?.skills);
+  const profileSkills = new Set(splitCsv(profile.skills).map(item => item.toLowerCase()));
+  const matchedSkills = requiredSkills.filter(item => profileSkills.has(item.toLowerCase()));
+  const missingSkills = requiredSkills.filter(item => !profileSkills.has(item.toLowerCase()));
+  const completeness = youthProfileCompletion();
+  const educationMatch = profile.education && job?.education && profile.education === job.education;
+  const experienceMatch = profile.experience && job?.experience && profile.experience === job.experience;
+  const countryMatch = profile.country && job?.country && profile.country === job.country;
+  const regionMatch = profile.region && job?.region && profile.region.toLowerCase() === job.region.toLowerCase();
+  const skillsScore = requiredSkills.length ? Math.round((matchedSkills.length / requiredSkills.length) * 34) : 22;
+  const score = Math.min(98, Math.round(
+    (completeness * 0.30) +
+    skillsScore +
+    (educationMatch ? 14 : profile.education ? 7 : 0) +
+    (experienceMatch ? 12 : profile.experience ? 6 : 0) +
+    (countryMatch ? 6 : 2) +
+    (regionMatch ? 4 : 0)
+  ));
+  const checklist = [
+    {
+      label: 'Profile completeness looks sufficient',
+      passed: completeness >= 75,
+      detail: completeness >= 75
+        ? `Your profile is ${completeness}% complete.`
+        : `Your profile is ${completeness}% complete. Add more detail before submitting.`
+    },
+    {
+      label: 'Education requirement appears aligned',
+      passed: !!educationMatch,
+      detail: educationMatch
+        ? `Your profile education matches ${job?.education || 'the stated requirement'}.`
+        : `This role expects ${job?.education || 'specific education details'}. Your current profile shows ${profile.education || 'no education selected yet'}.`
+    },
+    {
+      label: 'Experience requirement appears aligned',
+      passed: !!experienceMatch,
+      detail: experienceMatch
+        ? `Your experience level matches ${job?.experience || 'the role requirement'}.`
+        : `This role expects ${job?.experience || 'specific experience details'}. Your current profile shows ${profile.experience || 'no experience level selected yet'}.`
+    },
+    {
+      label: 'Location signal is aligned',
+      passed: !!(countryMatch || regionMatch),
+      detail: countryMatch || regionMatch
+        ? `Your profile location aligns with ${job?.region || job?.country || 'the opportunity location'}.`
+        : `Your current location (${profile.region || profile.country || 'not yet set'}) may need confirmation for this role.`
+    },
+    {
+      label: 'Core skills overlap is visible',
+      passed: missingSkills.length <= Math.max(1, Math.floor(requiredSkills.length / 3)),
+      detail: matchedSkills.length
+        ? `You already match ${matchedSkills.length} of ${requiredSkills.length || 0} listed skills.`
+        : 'The platform cannot yet see strong overlap between your listed skills and this role.'
+    }
+  ];
+  const nextActions = [];
+  if (completeness < 75) nextActions.push('Complete your profile before you submit.');
+  if (!educationMatch) nextActions.push('Check the education requirement carefully.');
+  if (!experienceMatch) nextActions.push('Clarify your experience level and practical exposure.');
+  if (missingSkills.length) nextActions.push(`Strengthen or better evidence these skills: ${missingSkills.slice(0, 4).join(', ')}.`);
+  if (!nextActions.length) nextActions.push('You appear ready to proceed to a full application session.');
+  return {
+    score,
+    band: readinessBand(score),
+    completeness,
+    matchedSkills,
+    missingSkills,
+    checklist,
+    nextActions,
+    learningSignal: missingSkills.length
+      ? `Suggested upskilling focus: ${missingSkills.slice(0, 3).join(', ')}`
+      : 'Your current profile looks broadly aligned to this role.'
+  };
+}
+
+function normalizeQuestions(raw) {
+  return (raw || []).map((item, index) => ({
+    id: item.id,
+    text: item.question_text || item.questionText || `Screening question ${index + 1}`,
+    type: item.question_type || item.questionType || 'Short Text',
+    optionsText: item.options_text || item.optionsText || '',
+    required: item.is_required !== false,
+    sortOrder: item.sort_order || item.sortOrder || (index + 1)
+  })).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
+async function loadSavedOpportunitiesFromSupabase() {
+  ensureEnhancedState();
+  state.shortlist.opportunities = [];
+  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
+  const { data, error } = await supabase
+    .from('saved_opportunities')
+    .select('id, opportunity_id, created_at')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error loading saved opportunities:', error);
+    return;
+  }
+  state.shortlist.opportunities = (data || []).map(item => ({
+    id: item.id,
+    opportunityId: item.opportunity_id,
+    createdAt: item.created_at
+  }));
+}
+
+async function loadApplicationDraftsFromSupabase() {
+  ensureEnhancedState();
+  state.applicationDrafts = [];
+  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
+  const { data, error } = await supabase
+    .from('opportunity_application_drafts')
+    .select('*')
+    .eq('applicant_id', currentUser.id)
+    .order('updated_at', { ascending: false });
+  if (error) {
+    console.warn('Application drafts load warning:', error);
+    return;
+  }
+  state.applicationDrafts = (data || []).map(item => ({
+    id: item.id,
+    opportunityId: item.opportunity_id,
+    currentStep: item.current_step || 1,
+    readinessScore: item.readiness_score || 0,
+    readinessBand: item.readiness_band || 'Early Stage',
+    readinessSummary: item.readiness_summary || {},
+    motivationNote: item.motivation_note || '',
+    documentState: item.document_state || {},
+    screeningAnswers: item.screening_answers || {},
+    draftPayload: item.draft_payload || {},
+    draftStatus: item.draft_status || 'In Progress',
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    submittedAt: item.submitted_at || null
+  }));
+}
+
+async function ensureOpportunityQuestions(opportunityId) {
+  ensureEnhancedState();
+  if (state.screeningQuestions[opportunityId]) return state.screeningQuestions[opportunityId];
+  if (!isConfigured || !supabase) {
+    state.screeningQuestions[opportunityId] = [];
+    return [];
+  }
+  const { data, error } = await supabase
+    .from('opportunity_screening_questions')
+    .select('*')
+    .eq('opportunity_id', opportunityId)
+    .order('sort_order', { ascending: true });
+  if (error) {
+    console.warn('Opportunity questions load warning:', error);
+    state.screeningQuestions[opportunityId] = [];
+    return [];
+  }
+  const normalized = normalizeQuestions(data || []);
+  state.screeningQuestions[opportunityId] = normalized;
+  return normalized;
+}
+
+async function upsertOpportunityDraft(opportunityId, changes = {}) {
+  ensureEnhancedState();
+  if (!isConfigured || !supabase || !currentUser) return null;
+  const existing = getDraftByOpportunityId(opportunityId);
+  const readiness = changes.readinessSummary || existing?.readinessSummary || calculateOpportunityReadiness(getOpportunityById(opportunityId));
+  const payload = {
+    opportunity_id: opportunityId,
+    applicant_id: currentUser.id,
+    current_step: changes.currentStep || existing?.currentStep || state.applicationWizard.step || 1,
+    draft_status: changes.draftStatus || existing?.draftStatus || 'In Progress',
+    readiness_score: readiness?.score || existing?.readinessScore || 0,
+    readiness_band: readiness?.band || existing?.readinessBand || 'Early Stage',
+    readiness_summary: readiness,
+    motivation_note: changes.motivationNote !== undefined ? changes.motivationNote : (existing?.motivationNote || ''),
+    document_state: changes.documentState !== undefined ? changes.documentState : (existing?.documentState || {}),
+    screening_answers: changes.screeningAnswers !== undefined ? changes.screeningAnswers : (existing?.screeningAnswers || {}),
+    draft_payload: changes.draftPayload !== undefined ? changes.draftPayload : (existing?.draftPayload || {})
+  };
+  const { data, error } = await supabase
+    .from('opportunity_application_drafts')
+    .upsert([payload], { onConflict: 'opportunity_id,applicant_id' })
+    .select()
+    .single();
+  if (error) {
+    console.warn('Opportunity draft save warning:', error);
+    return null;
+  }
+  await loadApplicationDraftsFromSupabase();
+  state.applicationWizard.draftId = data?.id || getDraftByOpportunityId(opportunityId)?.id || null;
+  return data;
+}
+
+function collectWizardFormState(opportunityId) {
+  const existing = getDraftByOpportunityId(opportunityId);
+  const motivation = document.getElementById('applicationMotivation')?.value || existing?.motivationNote || '';
+  const documentState = {
+    cvReady: !!document.getElementById('docCvReady')?.checked,
+    coverNoteReady: !!document.getElementById('docCoverReady')?.checked,
+    evidenceReady: !!document.getElementById('docEvidenceReady')?.checked
+  };
+  const questions = state.screeningQuestions[opportunityId] || [];
+  const screeningAnswers = {};
+  questions.forEach(question => {
+    const input = document.getElementById(`screening_${question.id}`);
+    if (input) screeningAnswers[question.id] = input.value || '';
+  });
+  return {
+    motivationNote: motivation,
+    documentState,
+    screeningAnswers
+  };
+}
+
+function saveOpportunityLocally(opportunityId, savedId = null) {
+  ensureEnhancedState();
+  if (!state.shortlist.opportunities.some(item => item.opportunityId === opportunityId)) {
+    state.shortlist.opportunities.unshift({ id: savedId || `local-${opportunityId}`, opportunityId, createdAt: new Date().toISOString() });
+  }
+}
+
+function removeSavedOpportunityLocally(opportunityId) {
+  ensureEnhancedState();
+  state.shortlist.opportunities = (state.shortlist.opportunities || []).filter(item => item.opportunityId !== opportunityId);
+}
+
+async function saveOpportunityToSupabase(opportunityId) {
+  ensureEnhancedState();
+  if (!isConfigured || !supabase || !currentUser) return { ok: false, reason: 'auth' };
+  const { data, error } = await supabase
+    .from('saved_opportunities')
+    .upsert([{ user_id: currentUser.id, opportunity_id: opportunityId }], { onConflict: 'user_id,opportunity_id' })
+    .select('id, opportunity_id, created_at')
+    .single();
+  if (error) {
+    console.error('Save opportunity error:', error);
+    return { ok: false, reason: error.message || 'save_failed' };
+  }
+  saveOpportunityLocally(opportunityId, data?.id || null);
+  return { ok: true };
+}
+
+async function removeSavedOpportunityFromSupabase(opportunityId) {
+  ensureEnhancedState();
+  if (!isConfigured || !supabase || !currentUser) return { ok: false, reason: 'auth' };
+  const { error } = await supabase
+    .from('saved_opportunities')
+    .delete()
+    .eq('user_id', currentUser.id)
+    .eq('opportunity_id', opportunityId);
+  if (error) {
+    console.error('Remove saved opportunity error:', error);
+    return { ok: false, reason: error.message || 'remove_failed' };
+  }
+  removeSavedOpportunityLocally(opportunityId);
+  return { ok: true };
+}
+
+function fitClass(score) {
+  if (score >= 80) return 'readiness-strong';
+  if (score >= 60) return 'readiness-medium';
+  return 'readiness-emerging';
+}
+
+function renderOpportunityActionBar(job) {
+  const saved = getSavedOpportunityIds().has(job.id);
+  const draft = getDraftByOpportunityId(job.id);
+  return `
+    <div class="opportunity-actions-row">
+      <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(job.id)}')">${saved ? 'Saved to shortlist' : 'Save'}</button>
+      <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">View details</button>
+      <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(job.id)}')">Readiness check</button>
+      <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">${draft ? 'Continue application' : 'Apply now'}</button>
+    </div>
+  `;
+}
+
+function renderMetaPill(value, fallback = '') {
+  if (!String(value || '').trim()) return '';
+  return `<span class="pill">${escapeHtml(value || fallback)}</span>`;
+}
+
+function renderRichJobSkills(job) {
+  return splitCsv(job.skills).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('');
+}
+
+function renderRelatedOpportunities(currentJob) {
+  const related = (state.jobs || [])
+    .filter(item => item.id !== currentJob.id && item.status === 'Verified')
+    .sort((a, b) => matchScore(b) - matchScore(a))
+    .slice(0, 3);
+  if (!related.length) {
+    return `<div class="empty-card"><h4>No related opportunities yet</h4><p class="label">As more verified listings are published, related opportunities will appear here.</p></div>`;
+  }
+  return related.map(item => `
+    <div class="micro-opportunity-card">
+      <div>
+        <h4>${escapeHtml(item.title)}</h4>
+        <p class="label">${escapeHtml(item.org)} • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</p>
+      </div>
+      <div class="micro-opportunity-actions">
+        <span class="pill">${matchScore(item)}% fit</span>
+        <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(item.id)}')">Open</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSuggestedTraining(readiness) {
+  const courses = (state.courses || []).filter(item => item.status === 'Verified').slice(0, 3);
+  if (!courses.length) {
+    return `<div class="empty-card"><h4>No suggested training yet</h4><p class="label">Verified courses will appear here when institutions publish aligned learning offers.</p></div>`;
+  }
+  return courses.map(course => `
+    <div class="mini-card pathway-recommendation-card">
+      <div class="mini-top">
+        ${statusBadge(course.status || 'Verified')}
+        <span class="pill">${escapeHtml(course.mode || 'Training')}</span>
+      </div>
+      <h4>${escapeHtml(course.title)}</h4>
+      <p class="label">${escapeHtml(course.provider)} • ${escapeHtml(course.duration || 'Flexible duration')}</p>
+      <p class="label">${escapeHtml(readiness.missingSkills.length ? 'Helpful for: ' + readiness.missingSkills.slice(0, 3).join(', ') : 'Broad relevance for this pathway.')}</p>
+    </div>
+  `).join('');
+}
+
+function jobCard(job, action) {
+  ensureEnhancedState();
+  const score = matchScore(job);
+  const status = job.status || 'Pending';
+  const isVerified = status === 'Verified';
+  const saved = getSavedOpportunityIds().has(job.id);
+  const draft = getDraftByOpportunityId(job.id);
+  const trustNote = isVerified
+    ? 'Verified listing visible to the public opportunity marketplace.'
+    : status === 'Pending'
+      ? 'Awaiting moderation before wider visibility.'
+      : status === 'Closed'
+        ? 'This opportunity is no longer accepting active applications.'
+        : 'Status updated through platform moderation.';
+  return `
+    <div class="job ${isVerified ? 'job-verified' : ''}">
+      <div>
+        <div class="job-header-row">
+          <div>
+            <h3>${escapeHtml(job.title)}</h3>
+            <p><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')} • ${escapeHtml(job.type || 'Opportunity')} • ${escapeHtml(job.experience || 'Experience not stated')}</p>
+          </div>
+          <div class="job-badges">
+            ${statusBadge(status)}
+            ${saved ? '<span class="pill pill-verified">Saved</span>' : ''}
+            ${draft ? `<span class="pill pill-trust">Step ${escapeHtml(String(draft.currentStep || 1))} in progress</span>` : ''}
+          </div>
+        </div>
+        <p>${escapeHtml(job.desc || 'Role details will appear on the structured opportunity page.')}</p>
+        <div>${renderRichJobSkills(job)}</div>
+        <div class="trust-inline">${escapeHtml(trustNote)}</div>
+        ${action ? renderOpportunityActionBar(job) : `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${statusBadge(status)}</div>`}
+      </div>
+      <div class="fit ${fitClass(score)}" style="--score:${score}"><span>${score}%</span></div>
+    </div>
+  `;
+}
+
+function shortlistView() {
+  ensureEnhancedState();
+  const savedItems = (state.shortlist.opportunities || []).map(item => getOpportunityById(item.opportunityId)).filter(Boolean);
+  return `
+    <div class="grid">
+      <div class="card span-12 shortlist-hero">
+        <div>
+          <div class="kicker">My shortlist</div>
+          <h3>Saved opportunities for later review</h3>
+          <p class="label">Save keeps opportunities in your shortlist. Apply launches a guided application session with readiness support and structured steps.</p>
+        </div>
+        <div class="pathway-summary-row">
+          <span class="pathway-summary-item">${savedItems.length} saved opportunities</span>
+          <span class="pathway-summary-item">${state.applicationDrafts.length} applications in progress</span>
+          <button class="secondary" onclick="setView('opportunities')">Browse more opportunities</button>
+        </div>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>Saved opportunities</h3><span class="pill pill-verified">Shortlist</span></div>
+        ${savedItems.length ? savedItems.map(item => `
+          <div class="shortlist-item-card">
+            <div>
+              <h4>${escapeHtml(item.title)}</h4>
+              <p class="label">${escapeHtml(item.org)} • ${escapeHtml(item.region || 'Location flexible')}, ${escapeHtml(item.country || 'Multi-country')}</p>
+              <div class="results-meta">
+                ${renderMetaPill(item.type)}
+                ${renderMetaPill(item.education)}
+                ${renderMetaPill(item.experience)}
+              </div>
+            </div>
+            <div class="shortlist-item-actions">
+              <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(item.id)}')">View details</button>
+              <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(item.id)}')">Readiness check</button>
+              <button class="primary" onclick="startOpportunityApplication('${escapeHtml(item.id)}')">${getDraftByOpportunityId(item.id) ? 'Continue applying' : 'Apply now'}</button>
+              <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(item.id)}')">Remove</button>
+            </div>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>Your shortlist is empty</h4><p class="label">Save interesting opportunities first, then return here to compare, review and apply with more intention.</p><button class="secondary" onclick="setView('opportunities')">Explore opportunities</button></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function opportunityDetailView() {
+  ensureEnhancedState();
+  const job = getOpportunityById(state.selectedOpportunityId);
+  if (!job) {
+    return `<div class="grid"><div class="card span-12"><div class="empty-card"><h4>Opportunity not found</h4><p class="label">Return to the marketplace and open another verified opportunity.</p><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div></div></div>`;
+  }
+  const readiness = calculateOpportunityReadiness(job);
+  const saved = getSavedOpportunityIds().has(job.id);
+  return `
+    <div class="grid">
+      <div class="card span-12 opp-detail-hero">
+        <div class="opp-detail-main">
+          <div class="kicker">Opportunity detail</div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')} • ${escapeHtml(job.type || 'Opportunity')}</p>
+          <div class="results-meta">
+            ${statusBadge(job.status || 'Verified')}
+            ${saved ? '<span class="pill pill-verified">Saved to shortlist</span>' : '<span class="pill">Not yet saved</span>'}
+            ${renderMetaPill(job.workArrangement)}
+            ${renderMetaPill(job.duration)}
+            ${renderMetaPill(job.compensation)}
+            ${job.deadline ? `<span class="pill">Deadline ${escapeHtml(job.deadline)}</span>` : ''}
+          </div>
+          <p class="opp-detail-description">${escapeHtml(job.desc || 'Structured opportunity details will expand here as employers publish richer metadata.')}</p>
+          <div class="opportunity-actions-row">
+            <button class="secondary" onclick="setView('opportunities')">Back to marketplace</button>
+            <button class="secondary" onclick="toggleOpportunitySave('${escapeHtml(job.id)}')">${saved ? 'Remove from shortlist' : 'Save to shortlist'}</button>
+            <button class="secondary" onclick="runOpportunityReadiness('${escapeHtml(job.id)}')">Open readiness check</button>
+            <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">${getDraftByOpportunityId(job.id) ? 'Continue application' : 'Start guided application'}</button>
+          </div>
+        </div>
+        <div class="opp-detail-fit-rail">
+          <div class="fit ${fitClass(readiness.score)}" style="--score:${readiness.score}"><span>${readiness.score}%</span></div>
+          <div class="label" style="text-align:center;">${escapeHtml(readiness.band)} readiness</div>
+        </div>
+      </div>
+      <div class="card span-8">
+        <div class="section-title"><h3>About this role</h3><span class="pill pill-trust">Structured detail page</span></div>
+        <div class="opp-detail-grid">
+          <div class="detail-list-card">
+            <h4>Eligibility and role criteria</h4>
+            <ul>
+              <li><b>Education:</b> ${escapeHtml(job.education || 'Not specified')}</li>
+              <li><b>Experience:</b> ${escapeHtml(job.experience || 'Not specified')}</li>
+              <li><b>Required skills:</b> ${escapeHtml(job.skills || 'Not specified')}</li>
+              <li><b>Work arrangement:</b> ${escapeHtml(job.workArrangement || 'Not specified')}</li>
+              <li><b>Duration:</b> ${escapeHtml(job.duration || 'Not specified')}</li>
+            </ul>
+          </div>
+          <div class="detail-list-card">
+            <h4>What the applicant may gain</h4>
+            <p class="label">${escapeHtml(job.learningOutcomes || job.benefits || 'The employer has not yet published detailed learning outcomes or benefits for this opportunity.')}</p>
+            <h4 style="margin-top:16px;">Why this role matters</h4>
+            <p class="label">${escapeHtml(job.benefits || 'Use this opportunity page to communicate what the job offers beyond a vacancy title: exposure, practical learning, mentorship, income or pathway progression.')}</p>
+          </div>
+        </div>
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Profile fit guidance</h3><span class="pill">Live</span></div>
+        <div class="fit-panel-list">
+          <div class="fit-panel-block"><b>${readiness.matchedSkills.length}</b><span class="label">criteria signals matched</span></div>
+          <div class="fit-panel-block"><b>${readiness.missingSkills.length}</b><span class="label">skills still missing</span></div>
+          <div class="fit-panel-block"><b>${readiness.completeness}%</b><span class="label">profile completeness</span></div>
+        </div>
+        <div class="soft-note" style="margin-top:12px;">${escapeHtml(readiness.learningSignal)}</div>
+        <div class="results-meta" style="margin-top:12px;">
+          ${(readiness.missingSkills.length ? readiness.missingSkills : ['No major skill gaps surfaced']).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Suggested training before or during application</h3><button class="secondary" onclick="setView('training')">See training catalogue</button></div>
+        ${renderSuggestedTraining(readiness)}
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Related opportunities</h3><button class="secondary" onclick="setView('opportunities')">Browse all</button></div>
+        ${renderRelatedOpportunities(job)}
+      </div>
+    </div>
+  `;
+}
+
+function readinessCheckView() {
+  ensureEnhancedState();
+  const opportunityId = state.readinessCheck?.opportunityId || state.selectedOpportunityId;
+  const job = getOpportunityById(opportunityId);
+  const readiness = state.readinessCheck?.result || (job ? calculateOpportunityReadiness(job) : null);
+  if (!job || !readiness) return opportunityDetailView();
+  return `
+    <div class="grid">
+      <div class="card span-12 readiness-hero">
+        <div>
+          <div class="kicker">Readiness check</div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="label">This is where Save and Apply become meaningfully different: first understand how ready you are, then decide whether to proceed.</p>
+        </div>
+        <div class="readiness-score-hero ${fitClass(readiness.score)}">
+          <div class="metric">${readiness.score}%</div>
+          <div class="label">${escapeHtml(readiness.band)} readiness</div>
+        </div>
+      </div>
+      <div class="card span-8">
+        <div class="section-title"><h3>Self-assessment against listed criteria</h3><span class="pill pill-trust">Dynamic fit guidance</span></div>
+        <div class="criteria-check-list">
+          ${readiness.checklist.map(item => `
+            <div class="criteria-check-item ${item.passed ? 'criteria-check-pass' : 'criteria-check-watch'}">
+              <div class="criteria-check-state">${item.passed ? '✓' : '!'}</div>
+              <div>
+                <h4>${escapeHtml(item.label)}</h4>
+                <p class="label">${escapeHtml(item.detail)}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Next best actions</h3><span class="pill">Action path</span></div>
+        <div class="next-action-stack">
+          ${readiness.nextActions.map(action => `<div class="next-action-item">${escapeHtml(action)}</div>`).join('')}
+        </div>
+        <div class="soft-note" style="margin-top:14px;">${escapeHtml(readiness.learningSignal)}</div>
+        <div class="hero-actions" style="margin-top:14px;">
+          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Back to details</button>
+          <button class="primary" onclick="startOpportunityApplication('${escapeHtml(job.id)}')">Proceed to guided application</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderScreeningInput(question, value) {
+  const safeId = `screening_${question.id}`;
+  if (question.type === 'Long Text') {
+    return `<textarea id="${safeId}" placeholder="Write your response here">${escapeHtml(value || '')}</textarea>`;
+  }
+  if (question.type === 'Yes/No') {
+    return `
+      <select id="${safeId}">
+        ${renderOptions(['Yes', 'No'], value || '', 'Select response')}
+      </select>
+    `;
+  }
+  if (question.type === 'Single Select') {
+    const options = splitCsv(question.optionsText || '').length ? splitCsv(question.optionsText || '') : ['Option 1', 'Option 2'];
+    return `<select id="${safeId}">${renderOptions(options, value || '', 'Select option')}</select>`;
+  }
+  return `<input id="${safeId}" value="${escapeHtml(value || '')}" placeholder="Write your response" />`;
+}
+
+function applicationWizardView() {
+  ensureEnhancedState();
+  const opportunityId = state.applicationWizard?.opportunityId || state.selectedOpportunityId;
+  const job = getOpportunityById(opportunityId);
+  if (!job) return opportunityDetailView();
+  const draft = getDraftByOpportunityId(opportunityId) || {};
+  const readiness = draft.readinessSummary || calculateOpportunityReadiness(job);
+  const step = Math.min(5, Math.max(1, Number(state.applicationWizard?.step || draft.currentStep || 1)));
+  const labels = applicationStepLabels();
+  const screeningQuestions = state.screeningQuestions[opportunityId] || [];
+  let body = '';
+  if (step === 1) {
+    body = `
+      <div class="wizard-pane-grid">
+        <div class="detail-list-card">
+          <h4>Review the opportunity first</h4>
+          <p class="label">Read the role carefully before committing to a full application session.</p>
+          <ul>
+            <li><b>Organisation:</b> ${escapeHtml(job.org)}</li>
+            <li><b>Location:</b> ${escapeHtml(job.region || 'Location flexible')}, ${escapeHtml(job.country || 'Multi-country')}</li>
+            <li><b>Type:</b> ${escapeHtml(job.type || 'Opportunity')}</li>
+            <li><b>Required skills:</b> ${escapeHtml(job.skills || 'Not specified')}</li>
+          </ul>
+        </div>
+        <div class="detail-list-card">
+          <h4>Before you proceed</h4>
+          <p class="label">Use the next steps to assess your fit, prepare your package, respond to screening questions and only then submit formally.</p>
+          <div class="soft-note">This avoids the current shallow one-click behaviour and turns application into a more intentional session.</div>
+        </div>
+      </div>
+    `;
+  } else if (step === 2) {
+    body = `
+      <div class="wizard-pane-grid">
+        <div class="detail-list-card">
+          <h4>Your readiness score</h4>
+          <div class="wizard-score-shell ${fitClass(readiness.score)}">
+            <div class="metric">${readiness.score}%</div>
+            <div class="label">${escapeHtml(readiness.band)} readiness</div>
+          </div>
+          <div class="results-meta" style="margin-top:12px;">
+            ${(readiness.missingSkills.length ? readiness.missingSkills : ['No major skill gaps surfaced']).map(skill => `<span class="pill">${escapeHtml(skill)}</span>`).join('')}
+          </div>
+        </div>
+        <div class="detail-list-card">
+          <h4>Recommendation</h4>
+          <p class="label">${escapeHtml(readiness.nextActions[0] || 'Proceed carefully and make sure your application package is strong.')}</p>
+          <p class="label">${escapeHtml(readiness.learningSignal)}</p>
+        </div>
+      </div>
+    `;
+  } else if (step === 3) {
+    const documents = draft.documentState || {};
+    body = `
+      <div class="wizard-pane-grid">
+        <div class="detail-list-card">
+          <h4>Application package</h4>
+          <label class="full">Motivation note
+            <textarea id="applicationMotivation" placeholder="Why are you interested in this opportunity, and why are you a strong fit?">${escapeHtml(draft.motivationNote || '')}</textarea>
+          </label>
+        </div>
+        <div class="detail-list-card">
+          <h4>Readiness of your documents</h4>
+          <div class="check-toggle-list">
+            <label><input id="docCvReady" type="checkbox" ${documents.cvReady ? 'checked' : ''} /> My CV/resume is ready</label>
+            <label><input id="docCoverReady" type="checkbox" ${documents.coverNoteReady ? 'checked' : ''} /> My cover note or motivation statement is ready</label>
+            <label><input id="docEvidenceReady" type="checkbox" ${documents.evidenceReady ? 'checked' : ''} /> I have supporting evidence or references if requested</label>
+          </div>
+          <div class="soft-note">This step keeps the application session lively and reflective instead of instantly declaring success after one click.</div>
+        </div>
+      </div>
+    `;
+  } else if (step === 4) {
+    body = `
+      <div class="detail-list-card">
+        <h4>Screening questions</h4>
+        <p class="label">Employer-defined screening questions appear here if they exist. If none exist yet, the platform still records your application package and readiness state.</p>
+        ${screeningQuestions.length ? screeningQuestions.map(question => `
+          <div class="screening-question-card">
+            <label class="full">
+              ${escapeHtml(question.text)}${question.required ? ' *' : ''}
+              ${renderScreeningInput(question, draft.screeningAnswers?.[question.id] || '')}
+            </label>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>No screening questions were configured for this opportunity</h4><p class="label">You can still continue to confirmation with your readiness summary and motivation note.</p></div>`}
+      </div>
+    `;
+  } else {
+    const packageSummary = collectWizardFormState(opportunityId);
+    const answeredCount = Object.values(packageSummary.screeningAnswers || {}).filter(value => String(value || '').trim()).length;
+    body = `
+      <div class="wizard-pane-grid">
+        <div class="detail-list-card">
+          <h4>Final review</h4>
+          <ul>
+            <li><b>Opportunity:</b> ${escapeHtml(job.title)}</li>
+            <li><b>Readiness score:</b> ${escapeHtml(String(readiness.score || 0))}% (${escapeHtml(readiness.band || 'Early Stage')})</li>
+            <li><b>Motivation note prepared:</b> ${packageSummary.motivationNote.trim() ? 'Yes' : 'No'}</li>
+            <li><b>Document package ready:</b> ${(packageSummary.documentState.cvReady || packageSummary.documentState.coverNoteReady || packageSummary.documentState.evidenceReady) ? 'Partly or fully ready' : 'Not yet confirmed'}</li>
+            <li><b>Screening questions answered:</b> ${answeredCount}</li>
+          </ul>
+        </div>
+        <div class="detail-list-card">
+          <h4>What happens after submission</h4>
+          <p class="label">The application will move to <b>Submitted</b>, the opportunity will remain visible in your dashboard history, and this wizard draft will be marked as submitted.</p>
+          <div class="soft-note">This is the moment where Apply becomes a deliberate final action rather than a premature one-click popup.</div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="grid">
+      <div class="card span-12 wizard-shell-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Guided application session</div>
+            <h3>${escapeHtml(job.title)}</h3>
+            <p class="label">Step ${step} of 5 — ${escapeHtml(labels[step - 1])}</p>
+          </div>
+          <div class="results-meta">
+            ${statusBadge(draft.draftStatus || 'In Progress')}
+            <span class="pill">Readiness ${escapeHtml(String(readiness.score || 0))}%</span>
+          </div>
+        </div>
+        <div class="wizard-steps-row">
+          ${labels.map((label, index) => `<div class="wizard-step-chip ${index + 1 === step ? 'active' : ''} ${index + 1 < step ? 'complete' : ''}"><span>${index + 1}</span><b>${escapeHtml(label)}</b></div>`).join('')}
+        </div>
+        <div class="wizard-stage-panel">
+          ${body}
+        </div>
+        <div class="wizard-footer-actions">
+          <button class="secondary" onclick="viewOpportunityDetail('${escapeHtml(job.id)}')">Exit to details</button>
+          <div class="wizard-footer-main-actions">
+            ${step > 1 ? `<button class="secondary" onclick="changeApplicationStep(-1)">Back</button>` : ''}
+            ${step < 5 ? `<button class="primary" onclick="changeApplicationStep(1)">Save and continue</button>` : `<button class="primary" onclick="submitOpportunityApplication()">Submit application</button>`}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function applicationSuccessView() {
+  ensureEnhancedState();
+  const success = state.applicationWizard?.success || null;
+  if (!success) return opportunities();
+  return `
+    <div class="grid">
+      <div class="card span-12 application-success-shell">
+        <div class="success-icon">✓</div>
+        <div class="kicker">Application submitted</div>
+        <h3>${escapeHtml(success.title || 'Application submitted successfully')}</h3>
+        <p class="label">${escapeHtml(success.message || 'Your guided application was submitted and tracked successfully.')}</p>
+        <div class="pathway-summary-row" style="justify-content:center;">
+          <span class="pathway-summary-item">Opportunity ${escapeHtml(success.opportunityTitle || '')}</span>
+          <span class="pathway-summary-item">Status Submitted</span>
+          <span class="pathway-summary-item">Readiness ${escapeHtml(String(success.readinessScore || 0))}%</span>
+        </div>
+        <div class="hero-actions" style="justify-content:center; margin-top:18px;">
+          <button class="secondary" onclick="setView('dashboard')">Return to dashboard</button>
+          <button class="secondary" onclick="setView('shortlist')">Go to shortlist</button>
+          <button class="primary" onclick="setView('opportunities')">Browse more opportunities</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function youthDash() {
+  ensureEnhancedState();
+  const ranked = [...state.jobs].filter(item => item.status === 'Verified').sort((a, b) => matchScore(b) - matchScore(a));
+  const completion = youthProfileCompletion();
+  const savedCount = state.shortlist.opportunities.length;
+  const inProgressCount = state.applicationDrafts.filter(item => item.draftStatus !== 'Submitted').length;
+  const submittedCount = youthApplicationCount();
+  return `
+    ${onboardingPanel()}
+    <div class="notice"><b>Guided product upgrade:</b> Save now stores opportunities in your shortlist, View Details opens a structured opportunity page, Readiness Check runs a self-assessment, and Apply launches a real guided session.</div>
+    <div class="grid" style="margin-top:18px;">
+      <div class="card span-3"><div class="label">Profile completeness</div><div class="metric">${completion}%</div><div class="label">Improve this to strengthen readiness and relevance.</div></div>
+      <div class="card span-3"><div class="label">Saved opportunities</div><div class="metric">${savedCount}</div><div class="label">Your shortlist for later comparison and action.</div></div>
+      <div class="card span-3"><div class="label">Applications in progress</div><div class="metric">${inProgressCount}</div><div class="label">Guided application sessions not yet submitted.</div></div>
+      <div class="card span-3"><div class="label">Submitted applications</div><div class="metric">${submittedCount}</div><div class="label">Formal applications already sent to employers.</div></div>
+    </div>
+    ${completionCard('Youth profile readiness', completion, 'A fuller profile improves readiness checks, fit explanations and employer confidence.', 'Complete youth profile')}
+    <div class="grid" style="margin-top:18px;">
+      <div class="card span-8">
+        <div class="section-title"><h3>Recommended opportunities</h3><div class="hero-actions"><button class="secondary" onclick="setView('shortlist')">Open shortlist</button><button class="secondary" onclick="setView('opportunities')">View all</button></div></div>
+        ${ranked.slice(0, 3).length ? ranked.slice(0, 3).map(item => jobCard(item, true)).join('') : `<div class="empty-card"><h4>No verified opportunities yet</h4><p class="label">Once moderated listings are available, your strongest matches will appear here automatically.</p><button class="secondary" onclick="setView('opportunities')">Browse all opportunities</button></div>`}
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Current action path</h3><span class="pill pill-trust">Lively workflow</span></div>
+        <div class="next-action-stack">
+          <div class="next-action-item">1. Save promising roles to your shortlist.</div>
+          <div class="next-action-item">2. Open details and review what the opportunity really offers.</div>
+          <div class="next-action-item">3. Run your readiness check before applying.</div>
+          <div class="next-action-item">4. Complete the guided application session instead of one-click submission.</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function opportunities() {
+  ensureEnhancedState();
+  const list = filteredJobs();
+  const f = browseFilters.jobs;
+  const controls = `
+    <label>
+      Keyword
+      <input value="${escapeHtml(f.keyword)}" placeholder="Search title, organisation, skills" oninput="setOpportunityFilter('keyword', this.value)" />
+    </label>
+    ${actionSelect('Country', 'oppFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="oppFilterCountry"', `<select id="oppFilterCountry" onchange="setOpportunityFilter('country', this.value)"`)}
+    <label>
+      Region / City
+      <input value="${escapeHtml(f.region)}" placeholder="e.g. Nairobi" oninput="setOpportunityFilter('region', this.value)" />
+    </label>
+    ${actionSelect('Opportunity type', 'oppFilterType', OPTION_SETS.opportunityTypes, f.type, 'All opportunity types').replace('<select id="oppFilterType"', `<select id="oppFilterType" onchange="setOpportunityFilter('type', this.value)"`)}
+    ${actionSelect('Education requirement', 'oppFilterEducation', OPTION_SETS.educationLevels, f.education, 'All education levels').replace('<select id="oppFilterEducation"', `<select id="oppFilterEducation" onchange="setOpportunityFilter('education', this.value)"`)}
+    ${actionSelect('Experience requirement', 'oppFilterExperience', OPTION_SETS.experienceLevels, f.experience, 'All experience levels').replace('<select id="oppFilterExperience"', `<select id="oppFilterExperience" onchange="setOpportunityFilter('experience', this.value)"`)}
+  `;
+  return `
+    <div class="grid">
+      <div class="card span-12 browse-hero-card">
+        <div>
+          <div class="kicker">Dynamic opportunity marketplace</div>
+          <h3>Explore, save, assess, then apply</h3>
+          <p class="label">The marketplace is no longer limited to a static list. Each opportunity now supports a shortlist action, a rich detail page, a readiness check and a guided application session.</p>
+        </div>
+        <div class="pathway-summary-row">
+          <span class="pathway-summary-item">${list.length} visible result${list.length === 1 ? '' : 's'}</span>
+          <span class="pathway-summary-item">${state.shortlist.opportunities.length} saved</span>
+          <span class="pathway-summary-item">${state.applicationDrafts.length} in progress</span>
+        </div>
+      </div>
+      <div class="card span-12">
+        ${filtersPanel('Search the opportunity marketplace', 'Filter by keyword, country, location, type and requirements, then move from static browse to live guided action.', controls, 'clearOpportunityFilters')}
+        <div class="results-meta">
+          <span class="pill pill-verified">Verified and visible listings only</span>
+          <span class="pill pill-trust">Shortlist + readiness + guided apply enabled</span>
+        </div>
+        <div class="notice trust-notice"><b>Experience upgrade:</b> Save keeps opportunities for later, while Apply starts a proper application journey. They are now treated as different actions.</div>
+        <div style="margin-top:14px;">
+          ${list.length ? list.map(item => jobCard(item, true)).join('') : `
+            <div class="empty-card">
+              <h4>No opportunities matched your search</h4>
+              <p class="label">Try removing or widening some filters, then explore again.</p>
+              <div class="hero-actions">
+                <button class="secondary" onclick="clearOpportunityFilters()">Reset filters</button>
+                <button class="secondary" onclick="setView('home')">Return home</button>
+              </div>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function navItems() {
+  ensureEnhancedState();
+  if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'shortlist', 'training', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+}
+
+function desc() {
+  if (state.view === 'home') return 'Discover verified youth opportunities, training pathways and trusted partners across Africa.';
+  if (state.view === 'shortlist') return 'Review saved opportunities, compare them deliberately and launch guided applications when you are ready.';
+  if (state.view === 'opportunity detail') return 'Structured opportunity page with trust, fit, suggested training and richer employer detail.';
+  if (state.view === 'readiness check') return 'Run a self-assessment before deciding whether to apply.';
+  if (state.view === 'application wizard') return 'A true guided application session with structured steps instead of one-click submission.';
+  if (state.view === 'application success') return 'Your guided application has been submitted and tracked successfully.';
+  if (state.view === 'about') return 'Learn what Jobs4Youth is, who it serves, and why it exists.';
+  if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
+  if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
+  if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
+  if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
+  if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
+  if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
+  if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
+  return 'Verify partners, monitor activity and generate labour market intelligence.';
+}
+
+async function loadJobsFromSupabase() {
+  if (!isConfigured || !supabase) return;
+  const { data, error } = await supabase.from('opportunities').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error loading jobs:', error);
+    return;
+  }
+  state.jobs = (data || []).map(job => ({
+    id: job.id,
+    title: job.title || 'No title',
+    org: job.organization_name || 'Unknown organisation',
+    country: job.country || '',
+    region: job.region || '',
+    type: job.opportunity_type || '',
+    skills: job.required_skills || '',
+    education: job.education_requirement || '',
+    experience: job.experience_requirement || '',
+    status: job.status || 'Pending',
+    desc: job.description || '',
+    postedBy: job.posted_by || null,
+    deadline: job.deadline || '',
+    compensation: job.compensation || '',
+    workArrangement: job.work_arrangement || '',
+    duration: job.duration || '',
+    benefits: job.benefits || '',
+    learningOutcomes: job.learning_outcomes || ''
+  }));
+}
+
+async function loadApplicationsFromSupabase() {
+  ensureEnhancedState();
+  state.applications = [];
+  state.employerCandidates = [];
+  if (!isConfigured || !currentUser || !supabase) return;
+  if (state.role === 'youth') {
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, opportunity_id, application_status, created_at')
+      .eq('applicant_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading youth applications:', error);
+      return;
+    }
+    state.applications = (data || []).map(item => ({
+      id: item.id,
+      opportunityId: item.opportunity_id,
+      status: item.application_status || 'Submitted',
+      createdAt: item.created_at
+    }));
+    return;
+  }
+  if (state.role === 'employer' || state.role === 'admin') {
+    const { data: myOpps, error: oppError } = await supabase.from('opportunities').select('id,title').eq('posted_by', currentUser.id);
+    if (oppError) {
+      console.error('Error loading employer opportunities:', oppError);
+      return;
+    }
+    const opportunityIds = (myOpps || []).map(item => item.id);
+    if (!opportunityIds.length) return;
+    const { data: apps, error: appError } = await supabase
+      .from('applications')
+      .select('id, opportunity_id, applicant_id, application_status, created_at')
+      .in('opportunity_id', opportunityIds)
+      .order('created_at', { ascending: false });
+    if (appError) {
+      console.error('Error loading employer applications:', appError);
+      return;
+    }
+    const applicantIds = [...new Set((apps || []).map(item => item.applicant_id).filter(Boolean))];
+    let profileMap = {};
+    if (applicantIds.length) {
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, country, region, skills, education, experience_level')
+        .in('id', applicantIds);
+      if (!profileError) profileMap = Object.fromEntries((profiles || []).map(item => [item.id, item]));
+    }
+    const oppMap = Object.fromEntries((myOpps || []).map(item => [item.id, item]));
+    state.employerCandidates = (apps || []).map(item => ({
+      id: item.id,
+      opportunityTitle: oppMap[item.opportunity_id]?.title || 'Opportunity',
+      applicantName: profileMap[item.applicant_id]?.full_name || 'Applicant',
+      applicantEmail: profileMap[item.applicant_id]?.email || '',
+      country: profileMap[item.applicant_id]?.country || '',
+      region: profileMap[item.applicant_id]?.region || '',
+      skills: profileMap[item.applicant_id]?.skills || '',
+      education: profileMap[item.applicant_id]?.education || '',
+      experience: profileMap[item.applicant_id]?.experience_level || '',
+      status: item.application_status || 'Submitted'
+    }));
+  }
+}
+
+async function handleAuthSubmit() {
+  if (!isConfigured) {
+    pushToast('Add config.js with your Supabase URL and anon key first.', 'warning');
+    return;
+  }
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value.trim();
+  const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
+  const fullName = document.getElementById('authFullName').value.trim();
+  const role = document.getElementById('authRole').value;
+  const msg = document.getElementById('authMessage');
+  msg.textContent = '';
+  if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
+  if (authMode === 'signup' && password !== confirmPassword) { msg.textContent = 'Passwords do not match.'; return; }
+  let authResult;
+  try {
+    authResult = authMode === 'signup'
+      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role } } })
+      : await supabase.auth.signInWithPassword({ email, password });
+  } catch (networkError) {
+    console.error('Signup/signin network error:', networkError);
+    msg.textContent = networkError?.message || networkError?.name || 'Network error while contacting Supabase.';
+    return;
+  }
+  if (authResult.error) {
+    console.error('Auth error full object:', authResult.error);
+    msg.textContent = authResult.error?.message || authResult.error?.name || authResult.error?.status || JSON.stringify(authResult.error);
+    return;
+  }
+  if (authMode === 'signup' && !authResult.data.session) {
+    closeAuthModal();
+    openAuthSuccessModal(
+      'Confirm your email to conclude sign up',
+      'Your account has been created successfully. Please open your email and click the confirmation link before signing in to Jobs4Youth.'
+    );
+    return;
+  }
+  currentUser = authResult.data.session?.user || authResult.data.user || null;
+  if (currentUser) {
+    const profile = await ensureProfile(currentUser);
+    syncProfileToState(profile);
+  }
+  await loadJobsFromSupabase();
+  await loadCoursesFromSupabase();
+  await loadApplicationsFromSupabase();
+  await loadSavedOpportunitiesFromSupabase();
+  await loadApplicationDraftsFromSupabase();
+  await loadSignalLayerFromSupabase();
+  await loadVerificationQueueFromSupabase();
+  await loadVerificationDocumentsFromSupabase();
+  await loadNotificationsFromSupabase();
+  closeAuthModal();
+  state.view = 'dashboard';
+  pushToast(authMode === 'signup' ? 'Account created successfully.' : 'Signed in successfully.');
+  render();
+}
+
+async function signOut() {
+  if (isConfigured && supabase) await supabase.auth.signOut();
+  currentUser = null;
+  state = structuredClone(demoState);
+  ensureEnhancedState();
+  browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
+  browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
+  state.view = 'home';
+  render();
+  pushToast('Signed out.', 'neutral');
+}
+
+window.toggleOpportunitySave = async function(opportunityId) {
+  ensureEnhancedState();
+  if (!currentUser) {
+    openLogin();
+    pushToast('Please sign in first to use your shortlist.', 'warning');
+    return;
+  }
+  const profile = await ensureProfile(currentUser);
+  if (!profile || profile.role !== 'youth') {
+    pushToast('Only youth accounts can save opportunities to a shortlist.', 'warning');
+    return;
+  }
+  const saved = getSavedOpportunityIds().has(opportunityId);
+  const result = saved
+    ? await removeSavedOpportunityFromSupabase(opportunityId)
+    : await saveOpportunityToSupabase(opportunityId);
+  if (!result.ok) {
+    pushToast(saved ? 'Unable to remove this opportunity from shortlist.' : 'Unable to save this opportunity right now.', 'warning');
+    return;
+  }
+  render();
+  pushToast(saved ? 'Removed from shortlist.' : 'Saved to shortlist.');
+};
+
+window.viewOpportunityDetail = async function(opportunityId) {
+  ensureEnhancedState();
+  state.selectedOpportunityId = opportunityId;
+  state.view = 'opportunity detail';
+  await ensureOpportunityQuestions(opportunityId);
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.runOpportunityReadiness = async function(opportunityId) {
+  ensureEnhancedState();
+  if (!currentUser) {
+    openLogin();
+    pushToast('Please sign in first to run a readiness check.', 'warning');
+    return;
+  }
+  const profile = await ensureProfile(currentUser);
+  if (!profile || profile.role !== 'youth') {
+    pushToast('Only youth accounts can run a readiness check for opportunities.', 'warning');
+    return;
+  }
+  const job = getOpportunityById(opportunityId);
+  if (!job) {
+    pushToast('Opportunity not found.', 'warning');
+    return;
+  }
+  const readiness = calculateOpportunityReadiness(job);
+  state.selectedOpportunityId = opportunityId;
+  state.readinessCheck = { opportunityId, result: readiness };
+  state.view = 'readiness check';
+  await upsertOpportunityDraft(opportunityId, { currentStep: 2, readinessSummary: readiness });
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.startOpportunityApplication = async function(opportunityId) {
+  ensureEnhancedState();
+  if (!currentUser) {
+    openLogin();
+    pushToast('Please sign in first to start an application.', 'warning');
+    return;
+  }
+  const profile = await ensureProfile(currentUser);
+  if (!profile || profile.role !== 'youth') {
+    pushToast('Only youth accounts can apply for opportunities.', 'warning');
+    return;
+  }
+  const job = getOpportunityById(opportunityId);
+  if (!job) {
+    pushToast('Opportunity not found.', 'warning');
+    return;
+  }
+  await ensureOpportunityQuestions(opportunityId);
+  const readiness = calculateOpportunityReadiness(job);
+  const existing = getDraftByOpportunityId(opportunityId);
+  state.selectedOpportunityId = opportunityId;
+  state.applicationWizard = {
+    opportunityId,
+    step: existing?.currentStep || 1,
+    draftId: existing?.id || null,
+    success: null
+  };
+  await upsertOpportunityDraft(opportunityId, {
+    currentStep: existing?.currentStep || 1,
+    readinessSummary: readiness,
+    draftStatus: existing?.draftStatus || 'In Progress'
+  });
+  state.view = 'application wizard';
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.changeApplicationStep = async function(direction) {
+  ensureEnhancedState();
+  const opportunityId = state.applicationWizard?.opportunityId;
+  if (!opportunityId) return;
+  let step = Number(state.applicationWizard.step || 1);
+  const packageState = collectWizardFormState(opportunityId);
+  const job = getOpportunityById(opportunityId);
+  const readiness = calculateOpportunityReadiness(job);
+  if (direction > 0 && step === 3 && !packageState.motivationNote.trim()) {
+    pushToast('Add a short motivation note before you continue.', 'warning');
+    return;
+  }
+  if (direction > 0 && step === 4) {
+    const questions = state.screeningQuestions[opportunityId] || [];
+    const missingRequired = questions.some(question => question.required && !String(packageState.screeningAnswers?.[question.id] || '').trim());
+    if (missingRequired) {
+      pushToast('Please answer all required screening questions before continuing.', 'warning');
+      return;
+    }
+  }
+  step = Math.min(5, Math.max(1, step + direction));
+  state.applicationWizard.step = step;
+  await upsertOpportunityDraft(opportunityId, {
+    currentStep: step,
+    draftStatus: step >= 5 ? 'Ready to Submit' : 'In Progress',
+    readinessSummary: readiness,
+    motivationNote: packageState.motivationNote,
+    documentState: packageState.documentState,
+    screeningAnswers: packageState.screeningAnswers,
+    draftPayload: {
+      profileName: state.profile.name || '',
+      updatedAt: new Date().toISOString()
+    }
+  });
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.submitOpportunityApplication = async function() {
+  ensureEnhancedState();
+  const opportunityId = state.applicationWizard?.opportunityId;
+  if (!opportunityId || !currentUser || !supabase) return;
+  const job = getOpportunityById(opportunityId);
+  const readiness = calculateOpportunityReadiness(job);
+  const packageState = collectWizardFormState(opportunityId);
+  if (!packageState.motivationNote.trim()) {
+    pushToast('Add a motivation note before submitting.', 'warning');
+    return;
+  }
+  let applicationRecord = null;
+  let applicationError = null;
+  const existingApplication = (state.applications || []).find(item => item.opportunityId === opportunityId);
+  if (existingApplication?.id) {
+    const update = await supabase
+      .from('applications')
+      .update({ application_status: 'Submitted' })
+      .eq('id', existingApplication.id)
+      .eq('applicant_id', currentUser.id)
+      .select()
+      .single();
+    applicationRecord = update.data;
+    applicationError = update.error;
+  } else {
+    const insert = await supabase
+      .from('applications')
+      .insert([{ opportunity_id: opportunityId, applicant_id: currentUser.id, application_status: 'Submitted' }])
+      .select()
+      .single();
+    applicationRecord = insert.data;
+    applicationError = insert.error;
+    if (applicationError && (applicationError.code === '23505' || String(applicationError.message || '').toLowerCase().includes('duplicate'))) {
+      const fallback = await supabase
+        .from('applications')
+        .update({ application_status: 'Submitted' })
+        .eq('opportunity_id', opportunityId)
+        .eq('applicant_id', currentUser.id)
+        .select()
+        .single();
+      applicationRecord = fallback.data;
+      applicationError = fallback.error;
+    }
+  }
+  if (applicationError) {
+    console.error('Application submission error:', applicationError);
+    pushToast(`Unable to submit the application: ${applicationError.message || 'unknown error'}`, 'warning');
+    return;
+  }
+  if (applicationRecord?.id) {
+    const payloadInsert = await supabase
+      .from('application_submission_payloads')
+      .upsert([{
+        application_id: applicationRecord.id,
+        draft_id: state.applicationWizard.draftId || null,
+        opportunity_id: opportunityId,
+        applicant_id: currentUser.id,
+        readiness_score: readiness.score,
+        readiness_band: readiness.band,
+        readiness_summary: readiness,
+        motivation_note: packageState.motivationNote,
+        document_state: packageState.documentState,
+        screening_answers: packageState.screeningAnswers,
+        submitted_at: new Date().toISOString()
+      }], { onConflict: 'application_id' });
+    if (payloadInsert.error) console.warn('Application submission payload warning:', payloadInsert.error);
+  }
+  await upsertOpportunityDraft(opportunityId, {
+    currentStep: 5,
+    draftStatus: 'Submitted',
+    readinessSummary: readiness,
+    motivationNote: packageState.motivationNote,
+    documentState: packageState.documentState,
+    screeningAnswers: packageState.screeningAnswers,
+    draftPayload: { submittedAt: new Date().toISOString() }
+  });
+  await loadApplicationsFromSupabase();
+  await loadApplicationDraftsFromSupabase();
+  state.applicationWizard.success = {
+    title: 'Your application has been submitted',
+    message: 'You reviewed the opportunity, assessed your fit, prepared your package and completed the guided application session successfully.',
+    readinessScore: readiness.score,
+    opportunityTitle: job?.title || 'Opportunity'
+  };
+  state.view = 'application success';
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  pushToast('Application submitted successfully.');
+};
+
+window.applyJob = async function(opportunityId) {
+  await window.startOpportunityApplication(opportunityId);
+};
+
+function render() {
+  ensureEnhancedState();
+  renderShell();
+  let c = '';
+  if (state.view === 'home') c = home();
+  else if (state.view === 'about') c = about();
+  else if (state.view === 'privacy') c = privacy();
+  else if (state.view === 'terms') c = terms();
+  else if (state.view === 'contact') c = contact();
+  else if (state.view === 'notifications') c = notificationsCenter();
+  else if (state.role === 'youth') {
+    if (state.view === 'dashboard') c = youthDash();
+    else if (state.view === 'opportunities') c = opportunities();
+    else if (state.view === 'shortlist') c = shortlistView();
+    else if (state.view === 'opportunity detail') c = opportunityDetailView();
+    else if (state.view === 'readiness check') c = readinessCheckView();
+    else if (state.view === 'application wizard') c = applicationWizardView();
+    else if (state.view === 'application success') c = applicationSuccessView();
+    else if (state.view === 'training') c = training();
+    else c = profile();
+  } else if (state.role === 'employer') {
+    c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
+  } else if (state.role === 'institution') {
+    c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
+  } else if (state.role === 'admin') {
+    c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
+  }
+  document.getElementById('content').innerHTML = c;
+}
+
+window.saveProfile = async function () {
+  if (!isConfigured || !supabase) { pushToast('Supabase not connected.', 'warning'); return; }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) { pushToast('Please sign in first.', 'warning'); return; }
+  const updates = {
+    full_name: document.getElementById('profileName')?.value || '',
+    country: document.getElementById('profileCountry')?.value || '',
+    region: document.getElementById('profileRegion')?.value || '',
+    education: document.getElementById('profileEducation')?.value || '',
+    availability: document.getElementById('profileAvailability')?.value || '',
+    experience_level: document.getElementById('profileExperience')?.value || '',
+    skills: document.getElementById('profileSkills')?.value || '',
+    interests: document.getElementById('profileInterests')?.value || '',
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+  if (error) { pushToast(`Failed to save profile: ${error.message}`, 'warning'); return; }
+  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
+  render();
+  pushToast('Profile saved successfully.');
+};
+
+window.saveOrganizationProfile = async function () {
+  if (!isConfigured || !supabase) { pushToast('Supabase not connected.', 'warning'); return; }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) { pushToast('Please sign in first.', 'warning'); return; }
+  const updates = {
+    full_name: document.getElementById('orgProfileName')?.value || '',
+    organization_name: document.getElementById('orgName')?.value || '',
+    sector: document.getElementById('orgSector')?.value || '',
+    country: document.getElementById('orgCountry')?.value || '',
+    region: document.getElementById('orgRegion')?.value || '',
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+  if (error) { pushToast(`Failed to save organisation profile: ${error.message}`, 'warning'); return; }
+  state.profile = { ...state.profile, name: updates.full_name, organizationName: updates.organization_name, sector: updates.sector, country: updates.country, region: updates.region };
+  render();
+  pushToast('Organisation profile saved successfully.');
+};
+
+async function initializeApp() {
+  ensureEnhancedState();
+  state.view = 'home';
+  if (isConfigured && supabase) {
+    const { data: sessionData, error } = await supabase.auth.getSession();
+    if (!error && sessionData?.session?.user) {
+      currentUser = sessionData.session.user;
+      const profile = await ensureProfile(currentUser);
+      syncProfileToState(profile);
+      state.view = 'dashboard';
+    }
+    await loadJobsFromSupabase();
+    await loadCoursesFromSupabase();
+    await loadApplicationsFromSupabase();
+    await loadSavedOpportunitiesFromSupabase();
+    await loadApplicationDraftsFromSupabase();
+    await loadSignalLayerFromSupabase();
+    await loadVerificationQueueFromSupabase();
+    await loadVerificationDocumentsFromSupabase();
+    await loadNotificationsFromSupabase();
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      currentUser = session?.user || null;
+      if (currentUser) {
+        const profile = await ensureProfile(currentUser);
+        syncProfileToState(profile);
+        ensureEnhancedState();
+        state.view = 'dashboard';
+      } else {
+        state = structuredClone(demoState);
+        ensureEnhancedState();
+        browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
+        browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
+        state.view = 'home';
+      }
+      await loadJobsFromSupabase();
+      await loadCoursesFromSupabase();
+      await loadApplicationsFromSupabase();
+      await loadSavedOpportunitiesFromSupabase();
+      await loadApplicationDraftsFromSupabase();
+      await loadSignalLayerFromSupabase();
+      await loadVerificationQueueFromSupabase();
+      await loadVerificationDocumentsFromSupabase();
+      await loadNotificationsFromSupabase();
+      render();
+    });
+  }
+  render();
+}
