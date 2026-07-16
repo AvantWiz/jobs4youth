@@ -1979,16 +1979,19 @@ window.openSignup = () => openAuthModal('signup');
 
 
 async function handlePasswordReset() {
-  if (!isConfigured || !supabase) {
-    alert('Supabase is not connected yet.');
-    return;
-  }
-
-  const email = document.getElementById('authEmail')?.value.trim() || '';
   const msg = document.getElementById('authMessage');
   const resetBtn = document.getElementById('btnResetPassword');
+  const email = document.getElementById('authEmail')?.value.trim() || '';
 
-  if (msg) msg.textContent = '';
+  if (msg) {
+    msg.textContent = '';
+    msg.style.color = '';
+  }
+
+  if (!isConfigured || !supabase) {
+    if (msg) msg.textContent = 'Supabase is not connected yet. Check config.js.';
+    return;
+  }
 
   if (!email) {
     if (msg) msg.textContent = 'Please enter your email address first.';
@@ -2001,21 +2004,40 @@ async function handlePasswordReset() {
   }
 
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://jobs4youth.org'
+    const redirectUrl = `${window.location.origin}/`;
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl
     });
 
+    console.log('Jobs4Youth password reset response:', { data, error, redirectUrl });
+
     if (error) {
-      console.error('Password reset error:', error);
-      if (msg) msg.textContent = error.message || 'Password reset failed.';
+      const errorMessage =
+        error.message ||
+        error.error_description ||
+        error.details ||
+        error.hint ||
+        'Password reset failed. Please check Supabase Auth SMTP settings and Resend configuration, then try again.';
+
+      if (msg) msg.textContent = errorMessage;
+      console.error('Jobs4Youth password reset error:', error);
       return;
     }
 
-    if (msg) msg.textContent = 'Password reset email sent. Please check your inbox.';
-    alert('Password reset email sent. Please check your inbox.');
-  } catch (networkError) {
-    console.error('Password reset network error:', networkError);
-    if (msg) msg.textContent = networkError?.message || 'Network error while sending password reset email.';
+    if (msg) {
+      msg.style.color = '#36702b';
+      msg.textContent = 'Password reset email sent. Please check your inbox or spam folder.';
+    }
+    alert('Password reset email sent. Please check your inbox or spam folder.');
+  } catch (err) {
+    console.error('Jobs4Youth password reset exception:', err);
+    const errorMessage =
+      err?.message ||
+      err?.error_description ||
+      err?.details ||
+      'Unexpected error while sending password reset email. Open the browser console for details.';
+
+    if (msg) msg.textContent = errorMessage;
   } finally {
     if (resetBtn) {
       resetBtn.disabled = false;
