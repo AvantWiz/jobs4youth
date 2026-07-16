@@ -1978,6 +1978,84 @@ window.openLogin = () => openAuthModal('login');
 window.openSignup = () => openAuthModal('signup');
 
 
+async function handlePasswordReset() {
+  if (!isConfigured || !supabase) {
+    alert('Supabase is not connected yet.');
+    return;
+  }
+
+  const email = document.getElementById('authEmail')?.value.trim() || '';
+  const msg = document.getElementById('authMessage');
+  const resetBtn = document.getElementById('btnResetPassword');
+
+  if (msg) msg.textContent = '';
+
+  if (!email) {
+    if (msg) msg.textContent = 'Please enter your email address first.';
+    return;
+  }
+
+  if (resetBtn) {
+    resetBtn.disabled = true;
+    resetBtn.textContent = 'Sending reset email...';
+  }
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://jobs4youth.org'
+    });
+
+    if (error) {
+      console.error('Password reset error:', error);
+      if (msg) msg.textContent = error.message || 'Password reset failed.';
+      return;
+    }
+
+    if (msg) msg.textContent = 'Password reset email sent. Please check your inbox.';
+    alert('Password reset email sent. Please check your inbox.');
+  } catch (networkError) {
+    console.error('Password reset network error:', networkError);
+    if (msg) msg.textContent = networkError?.message || 'Network error while sending password reset email.';
+  } finally {
+    if (resetBtn) {
+      resetBtn.disabled = false;
+      resetBtn.textContent = 'Reset password';
+    }
+  }
+}
+
+function hasPasswordRecoveryParams() {
+  const urlState = `${window.location.search || ''} ${window.location.hash || ''}`;
+  return urlState.includes('type=recovery') || urlState.includes('type%3Drecovery');
+}
+
+async function completePasswordRecovery() {
+  if (!isConfigured || !supabase) return;
+
+  const newPassword = prompt('Enter your new Jobs4Youth password. Use at least 6 characters.');
+  if (!newPassword) return;
+
+  if (newPassword.length < 6) {
+    alert('Password must be at least 6 characters. Please try the reset link again.');
+    return;
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    console.error('Password update error:', error);
+    alert(`Password update failed: ${error.message}`);
+    return;
+  }
+
+  try {
+    window.history.replaceState(null, '', `${window.location.origin}${window.location.pathname}`);
+  } catch (historyError) {
+    console.warn('Could not clean password recovery URL:', historyError);
+  }
+
+  alert('Password updated successfully. You are now signed in.');
+}
+
 async function handleAuthSubmit() {
   if (!isConfigured) return alert('Add config.js with your Supabase URL and anon key first.');
   const email = document.getElementById('authEmail').value.trim();
@@ -2095,6 +2173,9 @@ async function initializeApp() {
       const profile = await ensureProfile(currentUser);
       syncProfileToState(profile);
       state.view = 'dashboard';
+      if (hasPasswordRecoveryParams()) {
+        setTimeout(() => completePasswordRecovery(), 100);
+      }
     }
     await loadJobsFromSupabase();
     await loadCoursesFromSupabase();
@@ -2103,7 +2184,10 @@ async function initializeApp() {
     await loadVerificationQueueFromSupabase();
     await loadVerificationDocumentsFromSupabase();
     await loadNotificationsFromSupabase();
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setTimeout(() => completePasswordRecovery(), 100);
+      }
       currentUser = session?.user || null;
       if (currentUser) {
         const profile = await ensureProfile(currentUser);
@@ -2133,6 +2217,7 @@ document.getElementById('btnSignIn').addEventListener('click', demoSignIn);
 document.getElementById('btnSignOut').addEventListener('click', signOut);
 document.getElementById('closeAuthModal').addEventListener('click', closeAuthModal);
 document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSubmit);
+document.getElementById('btnResetPassword').addEventListener('click', handlePasswordReset);
 document.getElementById('tabLogin').addEventListener('click', () => { authMode = 'login'; updateAuthModal(); });
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
 
