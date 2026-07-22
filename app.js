@@ -35,6 +35,8 @@ const demoState = {
   courses: [],
   employers: [],
   applications: [],
+  savedOpportunities: [],
+  savedCourses: [],
   employerCandidates: [],
   verificationItems: [],
   verificationDocuments: [],
@@ -58,6 +60,18 @@ let authMode = 'login';
 let browseFilters = {
   jobs: { keyword: '', country: '', region: '', type: '', education: '', experience: '' },
   courses: { keyword: '', country: '', region: '', mode: '' }
+};
+
+let selectedOpportunityId = null;
+let selectedCourseId = null;
+let applicationWizard = {
+  opportunityId: null,
+  draftId: null,
+  step: 1,
+  readinessScore: 0,
+  motivationNote: '',
+  screeningAnswers: {},
+  documentState: { cvReady: false, certificateReady: false, referencesReady: false }
 };
 
 if (
@@ -569,7 +583,7 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 function navItems() {
   if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
@@ -584,6 +598,9 @@ function desc() {
   if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
+  if (state.view === 'shortlist') return 'Review saved opportunities and training before deciding what to apply for.';
+  if (state.view === 'opportunity detail') return 'Review the full opportunity details before saving or starting a guided application.';
+  if (state.view === 'application wizard') return 'Complete a guided, step-by-step application before final submission.';
   if (state.role === 'youth') return 'Find relevant jobs, internships and training matched to your skills and goals.';
   if (state.role === 'employer') return 'Post opportunities, review candidates, upload verification documents and receive decision messages professionally.';
   if (state.role === 'institution') return 'Publish courses, upload verification documents and receive clear verification and moderation messaging.';
@@ -950,7 +967,7 @@ function jobCard(j, action) {
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="primary" onclick="applyJob('${j.id}')">Apply / Save</button>` : ''}${statusBadge(status)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="secondary" onclick="viewOpportunity('${j.id}')">View details</button><button class="secondary" onclick="saveOpportunity('${j.id}')">Save</button><button class="primary" onclick="startApplication('${j.id}')">Start application</button>` : ''}${statusBadge(status)}</div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -974,6 +991,395 @@ window.applyJob = async function(id) {
   alert('✅ Application saved successfully!');
   render();
 };
+
+function showUserMessage(message) {
+  // Small, safe feedback helper. Uses alert for maximum compatibility with the current static app.
+  alert(message);
+}
+
+function getJobById(id) {
+  return (state.jobs || []).find(job => String(job.id) === String(id)) || null;
+}
+
+function getCourseById(id) {
+  return (state.courses || []).find(course => String(course.id) === String(id)) || null;
+}
+
+function isOpportunitySaved(id) {
+  return (state.savedOpportunities || []).some(item => String(item.opportunityId || item.opportunity_id) === String(id));
+}
+
+function isCourseSaved(id) {
+  return (state.savedCourses || []).some(item => String(item.courseId || item.course_id) === String(id));
+}
+
+async function requireYouthUser() {
+  if (!isConfigured || !supabase) {
+    showUserMessage('Supabase is not connected. Check config.js.');
+    return null;
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userError || !user) {
+    showUserMessage('Please sign in first.');
+    return null;
+  }
+  const profile = await ensureProfile(user);
+  if (!profile || profile.role !== 'youth') {
+    showUserMessage('Only youth accounts can use this youth application workflow.');
+    return null;
+  }
+  return { user, profile };
+}
+
+async function loadSavedItemsFromSupabase() {
+  state.savedOpportunities = [];
+  state.savedCourses = [];
+  if (!isConfigured || !supabase || !currentUser || state.role !== 'youth') return;
+  try {
+    const [savedOpps, savedCourses] = await Promise.all([
+      supabase.from('saved_opportunities').select('id, opportunity_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
+      supabase.from('saved_courses').select('id, course_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false })
+    ]);
+    if (!savedOpps.error) {
+      state.savedOpportunities = (savedOpps.data || []).map(item => ({
+        id: item.id,
+        opportunityId: item.opportunity_id,
+        createdAt: item.created_at
+      }));
+    } else {
+      console.warn('Saved opportunities load warning:', savedOpps.error);
+    }
+    if (!savedCourses.error) {
+      state.savedCourses = (savedCourses.data || []).map(item => ({
+        id: item.id,
+        courseId: item.course_id,
+        createdAt: item.created_at
+      }));
+    } else {
+      console.warn('Saved courses load warning:', savedCourses.error);
+    }
+  } catch (error) {
+    console.warn('Saved items load warning:', error);
+  }
+}
+
+window.viewOpportunity = function(opportunityId) {
+  selectedOpportunityId = opportunityId;
+  state.view = 'opportunity detail';
+  render();
+};
+
+window.saveOpportunity = async function(opportunityId) {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  if (isOpportunitySaved(opportunityId)) {
+    showUserMessage('This opportunity is already in your shortlist.');
+    return;
+  }
+  const { error } = await supabase.from('saved_opportunities').insert([{ user_id: auth.user.id, opportunity_id: opportunityId }]);
+  if (error) {
+    console.error('Save opportunity error:', error);
+    if ((error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') {
+      showUserMessage('This opportunity is already in your shortlist.');
+      await loadSavedItemsFromSupabase();
+      render();
+      return;
+    }
+    showUserMessage(`Could not save opportunity: ${error.message}`);
+    return;
+  }
+  await loadSavedItemsFromSupabase();
+  showUserMessage('Opportunity saved to My Shortlist.');
+  render();
+};
+
+window.removeSavedOpportunity = async function(opportunityId) {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  const { error } = await supabase.from('saved_opportunities').delete().eq('user_id', auth.user.id).eq('opportunity_id', opportunityId);
+  if (error) {
+    console.error('Remove saved opportunity error:', error);
+    showUserMessage(`Could not remove saved opportunity: ${error.message}`);
+    return;
+  }
+  await loadSavedItemsFromSupabase();
+  render();
+};
+
+window.saveCourse = async function(courseId) {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  if (isCourseSaved(courseId)) {
+    showUserMessage('This training is already in your shortlist.');
+    return;
+  }
+  const { error } = await supabase.from('saved_courses').insert([{ user_id: auth.user.id, course_id: courseId }]);
+  if (error) {
+    console.error('Save course error:', error);
+    if ((error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') {
+      showUserMessage('This training is already in your shortlist.');
+      await loadSavedItemsFromSupabase();
+      render();
+      return;
+    }
+    showUserMessage(`Could not save training: ${error.message}`);
+    return;
+  }
+  await loadSavedItemsFromSupabase();
+  showUserMessage('Training saved to My Shortlist.');
+  render();
+};
+
+window.removeSavedCourse = async function(courseId) {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  const { error } = await supabase.from('saved_courses').delete().eq('user_id', auth.user.id).eq('course_id', courseId);
+  if (error) {
+    console.error('Remove saved course error:', error);
+    showUserMessage(`Could not remove saved training: ${error.message}`);
+    return;
+  }
+  await loadSavedItemsFromSupabase();
+  render();
+};
+
+window.startApplication = async function(opportunityId) {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  const job = getJobById(opportunityId);
+  if (!job) {
+    showUserMessage('Opportunity not found. Please refresh and try again.');
+    return;
+  }
+  const readinessScore = Math.min(100, Math.max(0, matchScore(job)));
+  applicationWizard = {
+    opportunityId,
+    draftId: null,
+    step: 1,
+    readinessScore,
+    motivationNote: '',
+    screeningAnswers: {},
+    documentState: { cvReady: false, certificateReady: false, referencesReady: false }
+  };
+  try {
+    const { data: existingDraft, error: existingError } = await supabase
+      .from('opportunity_application_drafts')
+      .select('id,current_step,motivation_note,document_state,screening_answers,readiness_score')
+      .eq('opportunity_id', opportunityId)
+      .eq('applicant_id', auth.user.id)
+      .maybeSingle();
+    if (!existingError && existingDraft) {
+      applicationWizard.draftId = existingDraft.id;
+      applicationWizard.step = existingDraft.current_step || 1;
+      applicationWizard.motivationNote = existingDraft.motivation_note || '';
+      applicationWizard.documentState = existingDraft.document_state || applicationWizard.documentState;
+      applicationWizard.screeningAnswers = existingDraft.screening_answers || {};
+      applicationWizard.readinessScore = Number(existingDraft.readiness_score || readinessScore);
+    } else {
+      const { data: createdDraft, error: createError } = await supabase.from('opportunity_application_drafts').insert([{
+        opportunity_id: opportunityId,
+        applicant_id: auth.user.id,
+        current_step: 1,
+        draft_status: 'In Progress',
+        readiness_score: readinessScore,
+        readiness_band: readinessScore >= 80 ? 'Strong' : readinessScore >= 60 ? 'Progressing' : readinessScore >= 40 ? 'Emerging' : 'Early stage',
+        readiness_summary: { profile_fit_score: readinessScore, opportunity_title: job.title }
+      }]).select('id').single();
+      if (!createError && createdDraft) applicationWizard.draftId = createdDraft.id;
+      if (createError) console.warn('Draft create warning:', createError);
+    }
+  } catch (error) {
+    console.warn('Guided application draft warning:', error);
+  }
+  state.view = 'application wizard';
+  render();
+};
+
+async function saveApplicationDraftProgress() {
+  if (!isConfigured || !supabase || !currentUser || !applicationWizard.draftId) return;
+  const payload = {
+    current_step: applicationWizard.step,
+    readiness_score: applicationWizard.readinessScore,
+    motivation_note: applicationWizard.motivationNote,
+    document_state: applicationWizard.documentState,
+    screening_answers: applicationWizard.screeningAnswers,
+    draft_status: applicationWizard.step >= 5 ? 'Ready to Submit' : 'In Progress',
+    draft_payload: { saved_from_frontend: true, saved_at: new Date().toISOString() }
+  };
+  const { error } = await supabase.from('opportunity_application_drafts').update(payload).eq('id', applicationWizard.draftId);
+  if (error) console.warn('Draft update warning:', error);
+}
+
+window.updateWizardField = function(field, value) {
+  if (field === 'motivationNote') applicationWizard.motivationNote = value;
+  if (field === 'cvReady') applicationWizard.documentState.cvReady = !!value;
+  if (field === 'certificateReady') applicationWizard.documentState.certificateReady = !!value;
+  if (field === 'referencesReady') applicationWizard.documentState.referencesReady = !!value;
+  if (field.startsWith('screening_')) applicationWizard.screeningAnswers[field] = value;
+};
+
+window.goWizardStep = async function(nextStep) {
+  applicationWizard.step = Math.max(1, Math.min(6, Number(nextStep || 1)));
+  await saveApplicationDraftProgress();
+  render();
+};
+
+window.submitGuidedApplication = async function() {
+  const auth = await requireYouthUser();
+  if (!auth) return;
+  const opportunityId = applicationWizard.opportunityId;
+  if (!opportunityId) return showUserMessage('No opportunity selected.');
+  const { data: appRow, error: appError } = await supabase
+    .from('applications')
+    .upsert([{ opportunity_id: opportunityId, applicant_id: auth.user.id, application_status: 'Submitted' }], { onConflict: 'opportunity_id,applicant_id' })
+    .select('id')
+    .single();
+  if (appError) {
+    console.error('Guided application submit error:', appError);
+    showUserMessage(`Application could not be submitted: ${appError.message}`);
+    return;
+  }
+  try {
+    if (applicationWizard.draftId) {
+      await supabase.from('opportunity_application_drafts').update({
+        current_step: 6,
+        draft_status: 'Submitted',
+        submitted_at: new Date().toISOString(),
+        motivation_note: applicationWizard.motivationNote,
+        document_state: applicationWizard.documentState,
+        screening_answers: applicationWizard.screeningAnswers
+      }).eq('id', applicationWizard.draftId);
+    }
+    await supabase.from('application_submission_payloads').upsert([{
+      application_id: appRow.id,
+      opportunity_id: opportunityId,
+      applicant_id: auth.user.id,
+      readiness_score: applicationWizard.readinessScore,
+      readiness_band: applicationWizard.readinessScore >= 80 ? 'Strong' : applicationWizard.readinessScore >= 60 ? 'Progressing' : applicationWizard.readinessScore >= 40 ? 'Emerging' : 'Early stage',
+      readiness_summary: { profile_fit_score: applicationWizard.readinessScore },
+      motivation_note: applicationWizard.motivationNote,
+      document_state: applicationWizard.documentState,
+      screening_answers: applicationWizard.screeningAnswers,
+      submitted_at: new Date().toISOString()
+    }], { onConflict: 'application_id' });
+  } catch (payloadError) {
+    console.warn('Submission payload warning:', payloadError);
+  }
+  await loadApplicationsFromSupabase();
+  await loadSavedItemsFromSupabase();
+  applicationWizard.step = 6;
+  render();
+  showUserMessage('Application submitted successfully. You can track it from your dashboard.');
+};
+
+function opportunityDetailPage() {
+  const job = getJobById(selectedOpportunityId);
+  if (!job) {
+    return `<div class="grid"><div class="card span-12"><h3>Opportunity not found</h3><p class="label">Please return to the marketplace and open the opportunity again.</p><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div></div>`;
+  }
+  const score = matchScore(job);
+  return `
+    <div class="grid">
+      <div class="card span-12 opportunity-detail-hero">
+        <div class="opportunity-detail-main">
+          <div class="kicker">Verified opportunity detail</div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region)}, ${escapeHtml(job.country)} • ${escapeHtml(job.type)}</p>
+          <p class="opportunity-detail-description">${escapeHtml(job.desc || 'No detailed description has been provided yet.')}</p>
+          <div class="pathway-summary-row">
+            ${statusBadge(job.status || 'Pending')}
+            <span class="pathway-summary-item">Education: ${escapeHtml(job.education || 'Not specified')}</span>
+            <span class="pathway-summary-item">Experience: ${escapeHtml(job.experience || 'Not specified')}</span>
+          </div>
+          <div class="opportunity-actions-row">
+            <button class="secondary" onclick="setView('opportunities')">Back</button>
+            <button class="secondary" onclick="saveOpportunity('${escapeHtml(job.id)}')">${isOpportunitySaved(job.id) ? 'Saved' : 'Save to shortlist'}</button>
+            <button class="primary" onclick="startApplication('${escapeHtml(job.id)}')">Start guided application</button>
+          </div>
+        </div>
+        <div class="detail-score-shell ${score >= 75 ? 'score-strong' : score >= 55 ? 'score-medium' : 'score-emerging'}">
+          <div class="fit" style="--score:${score}; margin:0 auto 12px;"><span>${score}%</span></div>
+          <h4>Profile fit estimate</h4>
+          <p class="label">This score uses your current profile, skills, location and education fields. Complete your profile to improve matching.</p>
+        </div>
+      </div>
+      <div class="card span-6 detail-box">
+        <h4>Required skills</h4>
+        <p>${escapeHtml(job.skills || 'Skills not specified yet.')}</p>
+      </div>
+      <div class="card span-6 detail-box">
+        <h4>Application guidance</h4>
+        <p class="label">Review the opportunity, confirm your readiness, prepare your motivation note, answer screening questions and submit only when ready.</p>
+      </div>
+    </div>
+  `;
+}
+
+function shortlistPage() {
+  const savedJobs = (state.savedOpportunities || []).map(item => ({ item, job: getJobById(item.opportunityId) })).filter(x => x.job);
+  const savedTraining = (state.savedCourses || []).map(item => ({ item, course: getCourseById(item.courseId) })).filter(x => x.course);
+  return `
+    <div class="grid">
+      <div class="card span-12 shortlist-shell">
+        <div class="section-title"><div><div class="kicker">My Shortlist</div><h3>Saved opportunities and training</h3><p class="label">Save first, compare calmly, then apply when ready.</p></div><button class="secondary" onclick="setView('opportunities')">Browse more</button></div>
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Saved opportunities</h3><span class="pill">${savedJobs.length}</span></div>
+        ${savedJobs.length ? savedJobs.map(({ job, item }) => `
+          <div class="shortlist-item-card">
+            <div><h4>${escapeHtml(job.title)}</h4><p class="label"><b>${escapeHtml(job.org)}</b> • ${escapeHtml(job.region)}, ${escapeHtml(job.country)} • Saved ${item.createdAt ? escapeHtml(new Date(item.createdAt).toLocaleDateString()) : ''}</p>${statusBadge(job.status || 'Pending')}</div>
+            <div class="shortlist-item-actions"><button class="secondary" onclick="viewOpportunity('${escapeHtml(job.id)}')">View</button><button class="primary" onclick="startApplication('${escapeHtml(job.id)}')">Apply</button><button class="secondary" onclick="removeSavedOpportunity('${escapeHtml(job.id)}')">Remove</button></div>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>No saved opportunities yet</h4><p class="label">Open opportunities and click Save to create your shortlist.</p><button class="secondary" onclick="setView('opportunities')">Browse opportunities</button></div>`}
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Saved training</h3><span class="pill">${savedTraining.length}</span></div>
+        ${savedTraining.length ? savedTraining.map(({ course, item }) => `
+          <div class="shortlist-item-card">
+            <div><h4>${escapeHtml(course.title)}</h4><p class="label"><b>${escapeHtml(course.provider)}</b> • ${escapeHtml(course.mode)} • Saved ${item.createdAt ? escapeHtml(new Date(item.createdAt).toLocaleDateString()) : ''}</p>${statusBadge(course.status || 'Pending')}</div>
+            <div class="shortlist-item-actions"><button class="secondary" onclick="setView('training')">View training</button><button class="secondary" onclick="removeSavedCourse('${escapeHtml(course.id)}')">Remove</button></div>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>No saved training yet</h4><p class="label">Open training offers and save those that help close your skill gaps.</p><button class="secondary" onclick="setView('training')">Browse training</button></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function wizardStepChip(step, label) {
+  const cls = applicationWizard.step === step ? 'active' : applicationWizard.step > step ? 'complete' : '';
+  return `<div class="wizard-step-chip ${cls}"><span>${step}</span><b>${escapeHtml(label)}</b></div>`;
+}
+
+function applicationWizardPage() {
+  const job = getJobById(applicationWizard.opportunityId);
+  if (!job) return `<div class="card"><h3>No opportunity selected</h3><button class="secondary" onclick="setView('opportunities')">Back to opportunities</button></div>`;
+  const step = applicationWizard.step || 1;
+  const checks = [
+    { label: 'Profile name', ok: !!state.profile.name },
+    { label: 'Country and region', ok: !!state.profile.country && !!state.profile.region },
+    { label: 'Education', ok: !!state.profile.education },
+    { label: 'Skills', ok: !!state.profile.skills },
+    { label: 'Availability', ok: !!state.profile.availability }
+  ];
+  let body = '';
+  if (step === 1) body = `<h3>Review opportunity</h3><p><b>${escapeHtml(job.title)}</b> at ${escapeHtml(job.org)}</p><p class="label">${escapeHtml(job.desc || '')}</p><div class="pathway-summary-row"><span class="pathway-summary-item">${escapeHtml(job.region)}, ${escapeHtml(job.country)}</span><span class="pathway-summary-item">${escapeHtml(job.type)}</span><span class="pathway-summary-item">${escapeHtml(job.experience || 'Experience not specified')}</span></div>`;
+  if (step === 2) body = `<h3>Profile readiness</h3><div class="detail-score-shell"><div class="fit" style="--score:${applicationWizard.readinessScore}; margin:0 auto 12px;"><span>${applicationWizard.readinessScore}%</span></div><p class="label">Estimated readiness based on available profile and opportunity fields.</p></div><div class="criteria-list" style="margin-top:14px;">${checks.map(c => `<div class="criteria-item ${c.ok ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">${c.ok ? '✓' : '!'}</div><div><b>${escapeHtml(c.label)}</b><p class="label">${c.ok ? 'Completed' : 'Needs attention'}</p></div></div>`).join('')}</div>`;
+  if (step === 3) body = `<h3>Application package</h3><p class="label">Confirm what you have ready. This version records readiness; full file attachments can be added in the next document sprint.</p><div class="form"><label class="full">Motivation note<textarea oninput="updateWizardField('motivationNote', this.value)" placeholder="Why are you interested in this opportunity?">${escapeHtml(applicationWizard.motivationNote || '')}</textarea></label><label><input type="checkbox" ${applicationWizard.documentState.cvReady ? 'checked' : ''} onchange="updateWizardField('cvReady', this.checked)"/> CV ready</label><label><input type="checkbox" ${applicationWizard.documentState.certificateReady ? 'checked' : ''} onchange="updateWizardField('certificateReady', this.checked)"/> Certificates ready</label><label><input type="checkbox" ${applicationWizard.documentState.referencesReady ? 'checked' : ''} onchange="updateWizardField('referencesReady', this.checked)"/> References ready</label></div>`;
+  if (step === 4) body = `<h3>Screening questions</h3><div class="form"><label class="full">Why do you think you are a good fit?<textarea oninput="updateWizardField('screening_fit', this.value)">${escapeHtml(applicationWizard.screeningAnswers.screening_fit || '')}</textarea></label><label class="full">Are you available for this opportunity?<select onchange="updateWizardField('screening_available', this.value)"><option value="">Select</option><option ${applicationWizard.screeningAnswers.screening_available === 'Yes' ? 'selected' : ''}>Yes</option><option ${applicationWizard.screeningAnswers.screening_available === 'No' ? 'selected' : ''}>No</option></select></label></div>`;
+  if (step === 5) body = `<h3>Final review</h3><p><b>Opportunity:</b> ${escapeHtml(job.title)}</p><p><b>Employer:</b> ${escapeHtml(job.org)}</p><p><b>Readiness:</b> ${applicationWizard.readinessScore}%</p><p><b>Motivation note:</b> ${escapeHtml(applicationWizard.motivationNote || 'Not provided')}</p><div class="notice"><b>Almost done:</b> Click Submit Application only when you are ready. This is the point where your application is officially submitted.</div>`;
+  if (step === 6) body = `<div class="success-state"><div class="success-icon">✓</div><h3>Application submitted</h3><p class="lead">Your application has been submitted successfully. You can continue browsing opportunities or return to your dashboard.</p><div class="hero-actions"><button class="primary" onclick="setView('dashboard')">Go to dashboard</button><button class="secondary" onclick="setView('opportunities')">Browse more opportunities</button></div></div>`;
+  return `
+    <div class="grid">
+      <div class="card span-12 wizard-shell-card">
+        <div class="section-title"><div><div class="kicker">Guided application</div><h3>${escapeHtml(job.title)}</h3><p class="label">Complete each step before final submission.</p></div><button class="secondary" onclick="viewOpportunity('${escapeHtml(job.id)}')">Back to details</button></div>
+        <div class="wizard-step-row">${wizardStepChip(1,'Review')}${wizardStepChip(2,'Readiness')}${wizardStepChip(3,'Package')}${wizardStepChip(4,'Questions')}${wizardStepChip(5,'Confirm')}${wizardStepChip(6,'Submitted')}</div>
+        <div class="wizard-stage-panel">${body}</div>
+        ${step < 6 ? `<div class="wizard-footer-actions"><button class="secondary" onclick="goWizardStep(${Math.max(1, step - 1)})">Back</button><div class="wizard-footer-main-actions">${step < 5 ? `<button class="primary" onclick="goWizardStep(${step + 1})">Continue</button>` : `<button class="primary" onclick="submitGuidedApplication()">Submit application</button>`}</div></div>` : ''}
+      </div>
+    </div>
+  `;
+}
 
 function actionSelect(label, id, options, selected, placeholder='Select option') {
   return `
@@ -1280,6 +1686,7 @@ function training() {
           <p class="label">${escapeHtml(c.duration || 'Duration available on listing')}</p>
           <div>${(c.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
           <div class="trust-inline">Verified learning offer for public browsing</div>
+          <div class="hero-actions" style="margin-top:12px;"><button class="secondary" onclick="saveCourse('${escapeHtml(c.id)}')">${isCourseSaved(c.id) ? 'Saved' : 'Save training'}</button></div>
         </div>
       `).join('') : `
         <div class="card span-12">
@@ -1925,7 +2332,7 @@ function render() {
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
   else if (state.view === 'notifications') c = notificationsCenter();
-  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : profile();
+  else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : state.view === 'shortlist' ? shortlistPage() : state.view === 'opportunity detail' ? opportunityDetailPage() : state.view === 'application wizard' ? applicationWizardPage() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
   else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
@@ -2120,6 +2527,7 @@ async function handleAuthSubmit() {
   await loadJobsFromSupabase();
   await loadCoursesFromSupabase();
   await loadApplicationsFromSupabase();
+  await loadSavedItemsFromSupabase();
   await loadSignalLayerFromSupabase();
   await loadVerificationQueueFromSupabase();
   await loadVerificationDocumentsFromSupabase();
@@ -2135,6 +2543,9 @@ async function signOut() {
   if (isConfigured && supabase) await supabase.auth.signOut();
   currentUser = null;
   state = structuredClone(demoState);
+  selectedOpportunityId = null;
+  selectedCourseId = null;
+  applicationWizard = { opportunityId: null, draftId: null, step: 1, readinessScore: 0, motivationNote: '', screeningAnswers: {}, documentState: { cvReady: false, certificateReady: false, referencesReady: false } };
   browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
   browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
   state.view = 'home';
@@ -2202,6 +2613,7 @@ async function initializeApp() {
     await loadJobsFromSupabase();
     await loadCoursesFromSupabase();
     await loadApplicationsFromSupabase();
+    await loadSavedItemsFromSupabase();
     await loadSignalLayerFromSupabase();
     await loadVerificationQueueFromSupabase();
     await loadVerificationDocumentsFromSupabase();
