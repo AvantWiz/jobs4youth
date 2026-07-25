@@ -485,3 +485,174 @@
 @media(max-width:1180px){.opportunity-detail-hero,.detail-two-column,.wizard-grid-two{grid-template-columns:1fr}}
 @media(max-width:980px){.wizard-step-row{grid-template-columns:1fr}}
 @media(max-width:900px){.shortlist-item-card,.wizard-footer-actions{flex-direction:column;align-items:flex-start}.shortlist-item-actions,.wizard-footer-main-actions{justify-content:flex-start;width:100%}}
+
+/* ==========================================================
+   JOBS4YOUTH VISUAL IDENTITY RESTORATION
+   ========================================================== */
+
+/* Main workspace background */
+.main{
+  padding:28px;
+  overflow:auto;
+  background:
+    radial-gradient(circle at top right, rgba(237,180,43,.16), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(54,112,43,.12), transparent 38%),
+    linear-gradient(135deg,#f7faf1,#edf6e7);
+}
+
+/* Stronger card styling */
+.card{
+  background:linear-gradient(180deg,#ffffff,#fbfdf8);
+  border:1px solid var(--line);
+  box-shadow:0 18px 45px rgba(37,52,35,.10);
+  border-radius:24px;
+}
+
+/* Enhanced page header */
+.top{
+  background:linear-gradient(
+    135deg,
+    rgba(255,255,255,.95),
+    rgba(246,251,239,.90)
+  );
+  border:1px solid var(--line);
+  border-radius:26px;
+  padding:22px;
+  box-shadow:0 14px 34px rgba(31,49,34,.07);
+}
+
+/* Premium hero section */
+.hero-card{
+  background:
+    linear-gradient(
+      135deg,
+      rgba(54,112,43,.10),
+      rgba(237,180,43,.16)
+    ),
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #f5faef
+    );
+  border:1px solid #d7e7ca;
+}
+
+.hero-panel{
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #f6fbef
+    );
+  border:1px solid #d7e7ca;
+}
+
+/* Trust section */
+.trust-strip{
+  background:
+    linear-gradient(
+      135deg,
+      #eef7e6,
+      #fffaf0
+    );
+  border:1px solid #d7e7ca;
+}
+
+/* Feature cards */
+.feature-card{
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #f9fcf5
+    );
+  transition:all .25s ease;
+}
+
+.feature-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 18px 38px rgba(54,112,43,.12);
+}
+
+/* Dashboard widgets */
+.mini-card{
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #fafdf7
+    );
+}
+
+/* Filters area */
+.filters-panel{
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #f8fbf3
+    );
+}
+
+/* Footer */
+.footer-note-polished{
+  background:
+    linear-gradient(
+      135deg,
+      #ffffff,
+      #f6fbef
+    );
+  border:1px solid #d7e7ca;
+}
+
+/* Opportunity cards */
+.job{
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #f9fcf6
+    );
+}
+
+/* Good looking buttons */
+.primary{
+  background:linear-gradient(
+    135deg,
+    #36702b,
+    #4d8f3d
+  );
+}
+
+.primary:hover{
+  filter:brightness(1.05);
+}
+
+.secondary{
+  background:#f3f8ed;
+}
+
+/* Homepage metrics */
+.metric{
+  color:#36702b;
+  text-shadow:0 1px 0 rgba(255,255,255,.5);
+}
+
+/* Sidebar upgrade */
+.side{
+  background:
+    linear-gradient(
+      180deg,
+      #2e6125 0%,
+      #36702b 60%,
+      #417d32 100%
+    );
+}
+
+/* Subtle page animation */
+.card,
+.job,
+.feature-card,
+.mini-card{
+  transition:all .25s ease;
+}
