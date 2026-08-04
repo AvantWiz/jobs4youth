@@ -12,7 +12,8 @@ const OPTION_SETS = {
   opportunityTypes: ['Job','Internship','Apprenticeship','Training','Extension'],
   deliveryModes: ['Online','Hybrid','In-person'],
   courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp'],
-  verificationDocumentTypes: ['Business Registration Certificate','Tax Compliance Certificate','Accreditation or Licence','Organisation Profile','Authorisation Letter','Other Supporting Document']
+  verificationDocumentTypes: ['Business Registration Certificate','Tax Compliance Certificate','Accreditation or Licence','Organisation Profile','Authorisation Letter','Other Supporting Document'],
+  genderOptions: ['Prefer not to say','Woman','Man','Non-binary','Other']
 };
 
 const demoState = {
@@ -27,6 +28,7 @@ const demoState = {
     interests: 'agri-processing, dairy, quality control',
     availability: 'Immediate',
     experience: 'Entry Level',
+    gender: 'Woman',
     organizationName: '',
     sector: '',
     verified: false
@@ -582,11 +584,11 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 
 function navItems() {
-  if (!currentUser) return ['home', 'opportunities', 'training', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'insights', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
 
@@ -597,6 +599,10 @@ function desc() {
   if (state.view === 'privacy') return 'Understand how Jobs4Youth collects, uses and protects user information.';
   if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
+  if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
+  if (state.view === 'champions') return 'Invite youth, track Champion progress and grow the Jobs4Youth movement.';
+  if (state.view === 'universities') return 'Onboard universities, TVETs and career offices into Jobs4Youth.';
+  if (state.view === 'launch toolkit') return 'Access partner pitch wording, concept note summary and social campaign copy.';
   if (state.view === 'notifications') return 'Track platform alerts, queued email notifications and verification decision messages in one place.';
   if (state.view === 'shortlist') return 'Review saved opportunities and training before deciding what to apply for.';
   if (state.view === 'opportunity detail') return 'Review the full opportunity details before saving or starting a guided application.';
@@ -635,6 +641,7 @@ function syncProfileToState(profile) {
     interests: profile.interests || '',
     availability: profile.availability || '',
     experience: profile.experience_level || '',
+    gender: profile.gender || '',
     organizationName: profile.organization_name || '',
     sector: profile.sector || '',
     verified: !!profile.verified
@@ -967,7 +974,7 @@ function jobCard(j, action) {
         <p>${escapeHtml(j.desc)}</p>
         <div>${(j.skills || '').split(',').filter(Boolean).map(x => `<span class="pill">${escapeHtml(x.trim())}</span>`).join('')}</div>
         <div class="trust-inline">${escapeHtml(trustNote)}</div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="secondary" onclick="viewOpportunity('${j.id}')">View details</button><button class="secondary" onclick="saveOpportunity('${j.id}')">Save</button><button class="primary" onclick="startApplication('${j.id}')">Start application</button>` : ''}${statusBadge(status)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${action ? `<button class="secondary" onclick="viewOpportunity('${j.id}')">View details</button><button class="secondary" onclick="saveOpportunity('${j.id}')">Save</button><button class="secondary" onclick="reportOpportunity('${j.id}')">Report suspicious</button><button class="primary" onclick="startApplication('${j.id}')">Start application</button>` : ''}${statusBadge(status)}</div>
       </div>
       <div class="fit" style="--score:${score}"><span>${score}%</span></div>
     </div>
@@ -1295,6 +1302,7 @@ function opportunityDetailPage() {
           <div class="opportunity-actions-row">
             <button class="secondary" onclick="setView('opportunities')">Back</button>
             <button class="secondary" onclick="saveOpportunity('${escapeHtml(job.id)}')">${isOpportunitySaved(job.id) ? 'Saved' : 'Save to shortlist'}</button>
+            <button class="secondary" onclick="reportOpportunity('${escapeHtml(job.id)}')">Report suspicious</button>
             <button class="primary" onclick="startApplication('${escapeHtml(job.id)}')">Start guided application</button>
           </div>
         </div>
@@ -1474,60 +1482,109 @@ function homeSectionEmpty(titleText, bodyText, actionLabel, viewName) {
 function home() {
   const jobs = featuredJobs(3);
   const courses = featuredCourses(3);
+  const verifiedJobs = state.jobs.filter(j => j.status === 'Verified').length;
+  const verifiedCourses = state.courses.filter(c => c.status === 'Verified').length;
   return `
-    <div class="grid home-grid">
-      <div class="card span-8 hero-card">
+    <div class="grid home-grid award-home">
+      ${launchBanner()}
+      <div class="card span-8 hero-card hero-card-award">
         <div class="hero-copy">
-          <div class="kicker">Public continental platform</div>
-          <h3 class="hero-title">Verified youth opportunities, internships and skills pathways in one trusted platform</h3>
-          <p class="hero-text">Jobs4Youth helps young people discover credible opportunities, supports employers to reach job-ready talent, and enables institutions to publish relevant training offers across African labour markets.</p>
+          <div class="kicker">Africa's youth career operating system</div>
+          <h3 class="hero-title">Build your Career Passport. Find verified opportunities. Move from potential to paid work.</h3>
+          <p class="hero-text">Jobs4Youth helps young people discover trusted jobs, internships, apprenticeships and training pathways while building a visible career profile that employers and partners can trust.</p>
           <div class="hero-actions">
-            <button class="primary" onclick="setView('opportunities')">Browse opportunities</button>
-            <button class="secondary" onclick="setView('training')">Browse training</button>
-            <button class="secondary" onclick="openSignup()">Create account</button>
-            <button class="secondary" onclick="openLogin()">Sign in</button>
+            <button class="primary" onclick="openSignup()">Start my Career Passport</button>
+            <button class="secondary" onclick="setView('opportunities')">Browse verified jobs</button>
+            <button class="secondary" onclick="setView('training')">Find skills pathways</button>
+            <button class="secondary" onclick="openLogin()">I already have an account</button>
           </div>
           <div class="hero-points">
             <span class="pill pill-verified">Verified listings</span>
-            <span class="pill">Trusted employer and institution workflows</span>
-            <span class="pill">Career pathways and skills visibility</span>
+            <span class="pill">Career readiness score</span>
+            <span class="pill">Skills gap guidance</span>
+            <span class="pill pill-trust">Youth-first design</span>
           </div>
         </div>
       </div>
-      <div class="card span-4 hero-panel">
-        <h3>Why Jobs4Youth</h3>
-        <div class="feature-stat"><span class="metric">${state.jobs.filter(j => j.status === 'Verified').length}</span><span class="label">verified opportunities currently visible</span></div>
-        <div class="feature-stat"><span class="metric">${state.courses.filter(c => c.status === 'Verified').length}</span><span class="label">verified training offers and skills pathways</span></div>
-        <div class="feature-stat"><span class="metric">4</span><span class="label">connected user groups: youth, employers, institutions and admins</span></div>
-        <div class="soft-note">Public listings are moderated through platform governance and role-based review workflows.</div>
+
+      <div class="card span-4 hero-panel career-passport-preview">
+        <div class="kicker">Your Career Passport</div>
+        <h3>One profile. Many doors.</h3>
+        <div class="feature-stat"><span class="metric">${verifiedJobs}</span><span class="label">verified opportunities visible now</span></div>
+        <div class="feature-stat"><span class="metric">${verifiedCourses}</span><span class="label">verified learning pathways available</span></div>
+        <div class="feature-stat"><span class="metric">100</span><span class="label">readiness points to unlock better matching</span></div>
+        <div class="soft-note">Create an account, complete your profile, save opportunities, close skill gaps and apply with confidence.</div>
       </div>
 
-      <div class="card span-12">${onboardingPanel()}</div>
+      <div class="card span-12 youth-movement-strip">
+        <div class="section-title">
+          <div>
+            <div class="kicker">The Jobs4Youth promise</div>
+            <h3>Not just a job board. A youth opportunity movement.</h3>
+            <p class="label">The platform connects youth, employers and training institutions so young people can see where they stand, what to improve and where to apply next.</p>
+          </div>
+          <button class="primary" onclick="openSignup()">Join the movement</button>
+        </div>
+        <div class="trust-grid">
+          <div class="trust-card"><h4>Discover</h4><p class="label">Browse verified jobs, internships, apprenticeships and training pathways without guessing what is credible.</p></div>
+          <div class="trust-card"><h4>Build</h4><p class="label">Create a Career Passport that turns your skills, education, location and goals into a readiness profile.</p></div>
+          <div class="trust-card"><h4>Improve</h4><p class="label">Use CareerGPS to identify profile gaps, missing skills and training pathways that can improve your employability.</p></div>
+          <div class="trust-card"><h4>Apply</h4><p class="label">Save opportunities, prepare stronger applications and track your journey from interest to submission.</p></div>
+        </div>
+      </div>
 
       <div class="card span-12">
-        <div class="section-title"><h3>Choose your pathway</h3><span class="pill">Public quick start</span></div>
-        <div class="feature-grid">
-          <div class="feature-card">
-            <h4>For youth</h4>
-            <p>Find jobs, internships, apprenticeships and training offers that match your location, education and skills interests.</p>
-            <button class="secondary" onclick="setView('opportunities')">Explore opportunities</button>
+        ${onboardingPanel()}
+      </div>
+
+      ${employerConversionPanel()}
+
+      <div class="card span-7 flagship-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Flagship feature</div>
+            <h3>CareerGPS: your personal pathway coach</h3>
+            <p class="label">CareerGPS turns a youth profile into practical guidance: readiness score, target opportunity fit, skills gaps, recommended training and next best action.</p>
           </div>
-          <div class="feature-card">
-            <h4>For employers</h4>
-            <p>Publish opportunities, review candidate applications and participate in a more trusted, moderated recruitment workflow.</p>
-            <button class="secondary" onclick="openSignup()">Create employer account</button>
+          <span class="pill pill-verified">Award-ready feature</span>
+        </div>
+        <div class="detail-two-column">
+          <div class="detail-box">
+            <h4>Readiness score</h4>
+            <p class="label">Know whether your profile is strong enough for matching and what information is missing.</p>
           </div>
-          <div class="feature-card">
-            <h4>For institutions</h4>
-            <p>Promote training programmes that respond to labour-market demand and help young people close skills gaps faster.</p>
-            <button class="secondary" onclick="openSignup()">Create institution account</button>
+          <div class="detail-box">
+            <h4>Opportunity fit</h4>
+            <p class="label">Compare your skills against real opportunity requirements before applying.</p>
           </div>
-          <div class="feature-card">
-            <h4>For partners and administrators</h4>
-            <p>Support transparent verification, moderation and labour-market visibility across the platform ecosystem.</p>
-            <button class="secondary" onclick="setView('about')">Learn more</button>
+          <div class="detail-box">
+            <h4>Skills gap map</h4>
+            <p class="label">See the skills to strengthen and the training pathways that can help close the gap.</p>
+          </div>
+          <div class="detail-box">
+            <h4>Next best action</h4>
+            <p class="label">Get a simple action to take today instead of feeling lost in the job search.</p>
           </div>
         </div>
+        <div class="hero-actions" style="margin-top:16px;">
+          <button class="primary" onclick="openSignup()">Create account to unlock CareerGPS</button>
+          <button class="secondary" onclick="setView('opportunities')">Preview opportunities</button>
+        </div>
+      </div>
+
+      <div class="card span-5 youth-badges-card">
+        <div class="section-title"><h3>Earn employability badges</h3><span class="pill">Coming alive through your activity</span></div>
+        <div class="pathway-list">
+          <span class="pill pill-verified">Profile Complete</span>
+          <span class="pill">Job Ready</span>
+          <span class="pill">Skills Builder</span>
+          <span class="pill">First Application</span>
+          <span class="pill">Interview Ready</span>
+          <span class="pill">Women in Work Pathway</span>
+          <span class="pill">Digital Skills Ready</span>
+          <span class="pill">Green Jobs Ready</span>
+        </div>
+        <div class="notice" style="margin-top:14px;"><b>Why badges matter:</b> they make progress visible to youth and create clearer signals for employers, institutions and partners.</div>
       </div>
 
       <div class="card span-7">
@@ -1539,64 +1596,159 @@ function home() {
       </div>
 
       <div class="card span-5">
-        <div class="section-title"><h3>Featured training pathways</h3><button class="secondary" onclick="setView('training')">View all training</button></div>
-        <p class="label">Training providers can publish moderated learning offers aligned to market demand and youth pathways.</p>
+        <div class="section-title"><h3>Training pathways that close gaps</h3><button class="secondary" onclick="setView('training')">View all training</button></div>
+        <p class="label">Verified learning offers help youth respond to market demand and strengthen their Career Passport.</p>
         <div class="mini-grid single-column">
           ${courses.length ? courses.map(publicCourseTeaser).join('') : homeSectionEmpty('No verified training yet', 'Verified courses and skills programmes will appear here once institutions publish and admins approve them.', 'Browse training catalogue', 'training')}
         </div>
       </div>
 
-      <div class="card span-12 trust-strip">
-        <div class="section-title"><h3>Built for public trust and real world use</h3><span class="pill pill-verified">Moderated platform</span></div>
+      <div class="card span-12 partner-proof-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Built for scale, trust and funding readiness</div>
+            <h3>A platform youth use, employers trust and partners can measure</h3>
+            <p class="label">Jobs4Youth is designed to generate real-time evidence on youth demand, skills gaps, applications, training coverage and underserved segments.</p>
+          </div>
+          <button class="secondary" onclick="setView('about')">Why this matters</button>
+        </div>
         <div class="trust-grid">
-          <div class="trust-card">
-            <h4>Verification-first publishing</h4>
-            <p class="label">Employer and institution participation is supported by verification workflows, while new opportunities and courses go through review before they are promoted.</p>
-          </div>
-          <div class="trust-card">
-            <h4>Structured profiles and cleaner data</h4>
-            <p class="label">The platform already uses role-based profiles, structured fields and protected access rules to support safer public use and better matching.</p>
-          </div>
-          <div class="trust-card">
-            <h4>Actionable pathways for youth</h4>
-            <p class="label">Jobs4Youth is not only a vacancy site, it also connects opportunities, training and labour market signals in one evolving ecosystem.</p>
-          </div>
+          <div class="trust-card"><h4>Youth value</h4><p class="label">Personalised matches, progress tracking, shortlists, applications and career guidance.</p></div>
+          <div class="trust-card"><h4>Employer value</h4><p class="label">Better candidate visibility, structured applications and trust-checked recruitment workflows.</p></div>
+          <div class="trust-card"><h4>Institution value</h4><p class="label">Training providers can see where skills demand is rising and align programmes accordingly.</p></div>
+          <div class="trust-card"><h4>Funder value</h4><p class="label">Partners can monitor youth reach, readiness, skills gaps, opportunity density and labour-market signals.</p></div>
         </div>
       </div>
 
-      <div class="card span-12 final-cta">
+      <div class="card span-12 impact-preview-card">
+        <div class="section-title">
+          <div><div class="kicker">Impact evidence</div><h3>Built to show funders what is changing</h3><p class="label">Track youth reached, young women inclusion, applications, verified opportunities, training pathways, skills gaps and country intelligence.</p></div>
+          <button class="primary" onclick="setView('impact')">Open Impact Evidence</button>
+        </div>
+      </div>
+
+      <div class="card span-12 final-cta final-cta-award">
         <div>
-          <div class="kicker">Ready to get started?</div>
-          <h3>Join the Jobs4Youth network</h3>
-          <p class="label">Create an account to apply for opportunities, publish vacancies, share training offers or manage verification workflows.</p>
+          <div class="kicker">Ready to build your future?</div>
+          <h3>Join Jobs4Youth and start your Career Passport today</h3>
+          <p class="label">Create an account to get matched, save opportunities, build your readiness score and apply to verified pathways.</p>
         </div>
         <div class="hero-actions">
-          <button class="primary" onclick="openSignup()">Create account</button>
-          <button class="secondary" onclick="openLogin()">Sign in</button>
-          <button class="secondary" onclick="setView('contact')">Contact platform team</button>
+          <button class="primary" onclick="openSignup()">Create my free account</button>
+          <button class="secondary" onclick="setView('opportunities')">Browse first</button>
+          <button class="secondary" onclick="setView('contact')">Partner with us</button>
         </div>
       </div>
     </div>
   `;
 }
 
-
 function youthDash() {
   const ranked = [...state.jobs].sort((a, b) => matchScore(b) - matchScore(a));
   const completion = youthProfileCompletion();
+  const verifiedMatches = ranked.filter(j => j.status === 'Verified');
+  const savedCount = (state.savedOpportunities || []).length + (state.savedCourses || []).length;
+  const applicationsCount = state.applications.length;
+  const readinessBand = completion >= 85 ? 'Leader' : completion >= 70 ? 'Job ready' : completion >= 45 ? 'Building' : 'Getting started';
+  const nextActionTitle = completion < 75 ? 'Complete your Career Passport' : applicationsCount === 0 ? 'Apply to your strongest match' : 'Keep building momentum';
+  const nextActionText = completion < 75
+    ? `Your profile is ${completion}% complete. Add missing skills, location, education, interests and availability so Jobs4Youth can improve your matching.`
+    : applicationsCount === 0
+      ? 'You have enough profile information to start applying. Open your best match and use the guided application flow.'
+      : 'You have started your journey. Save more pathways, update skills and continue applying to verified opportunities.';
   return `
-    ${onboardingPanel()}
-    <div class="notice"><b>Professional guidance:</b> verified public listings, profile completeness prompts and skills pathways are now visible to help first-time users navigate the platform more confidently.</div>
-    ${completionCard('Profile completeness', completion, 'A fuller profile improves match quality, trust and opportunity relevance.', 'Complete youth profile')}
-    ${metrics()}
-    <div class="grid" style="margin-top:18px">
-      <div class="card span-8">
-        <div class="section-title"><h3>Best matches for ${escapeHtml(state.profile.name || 'you')}</h3><button class="secondary" onclick="setView('opportunities')">View all</button></div>
-        ${ranked.slice(0, 3).length ? ranked.slice(0, 3).map(j => jobCard(j, true)).join('') : `<div class="empty-card"><h4>No verified opportunities yet</h4><p class="label">Once moderated listings are available, your strongest matches will appear here automatically.</p><button class="secondary" onclick="setView('opportunities')">Browse all opportunities</button></div>`}
+    <div class="grid youth-command-centre">
+      <div class="card span-12 youth-dashboard-hero">
+        <div class="section-title">
+          <div>
+            <div class="kicker">My Career Passport</div>
+            <h3>Welcome back, ${escapeHtml(state.profile.name || 'future leader')}</h3>
+            <p class="label">This is your daily career cockpit: track readiness, discover matched opportunities, close skills gaps and move toward dignified work with confidence.</p>
+          </div>
+          <div class="fit ${completion >= 75 ? 'readiness-strong' : completion >= 50 ? 'readiness-medium' : 'readiness-emerging'}" style="--score:${completion}"><span>${completion}%</span></div>
+        </div>
+        <div class="pathway-summary-row">
+          <span class="pathway-summary-item"><strong>Status:</strong>&nbsp;${escapeHtml(readinessBand)}</span>
+          <span class="pathway-summary-item"><strong>Country:</strong>&nbsp;${escapeHtml(state.profile.country || 'Not added')}</span>
+          <span class="pathway-summary-item"><strong>Skills:</strong>&nbsp;${splitSkillsSimple(state.profile.skills).length || 0} listed</span>
+          <span class="pathway-summary-item"><strong>Applications:</strong>&nbsp;${applicationsCount}</span>
+          <span class="pathway-summary-item"><strong>Saved:</strong>&nbsp;${savedCount}</span>
+        </div>
+        <div class="hero-actions" style="margin-top:16px;">
+          <button class="primary" onclick="setView('opportunities')">Find my best match</button>
+          <button class="secondary" onclick="setView('profile')">Improve my passport</button>
+          <button class="secondary" onclick="document.getElementById('careerTwinNavBtn')?.click()">Open CareerGPS</button>
+          <button class="secondary" onclick="setView('shortlist')">View shortlist</button>
+        </div>
       </div>
-      <div class="card span-4">
-        <h3>Recommended skills pathway</h3>
+
+      ${safetyCenterCard(false)}
+
+      <div class="card span-8 next-action-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Today's next best action</div>
+            <h3>${escapeHtml(nextActionTitle)}</h3>
+            <p class="label">${escapeHtml(nextActionText)}</p>
+          </div>
+          <span class="pill pill-verified">Take action today</span>
+        </div>
+        <div class="chartbar"><div style="width:${completion}%"></div></div>
+        <div class="hero-actions" style="margin-top:14px;">
+          ${completion < 75 ? `<button class="primary" onclick="setView('profile')">Complete missing fields</button>` : `<button class="primary" onclick="setView('opportunities')">Apply to a verified opportunity</button>`}
+          <button class="secondary" onclick="setView('training')">Strengthen skills</button>
+        </div>
+      </div>
+
+      <div class="card span-4 achievement-card">
+        <div class="section-title"><h3>My badges</h3><span class="pill">Progress signals</span></div>
+        <div class="pathway-list">
+          <span class="pill ${completion >= 70 ? 'pill-verified' : ''}">Profile Builder</span>
+          <span class="pill ${completion >= 85 ? 'pill-verified' : ''}">Career Passport Ready</span>
+          <span class="pill ${savedCount > 0 ? 'pill-verified' : ''}">Opportunity Shortlister</span>
+          <span class="pill ${applicationsCount > 0 ? 'pill-verified' : ''}">First Application</span>
+          <span class="pill ${splitSkillsSimple(state.profile.skills).length >= 5 ? 'pill-verified' : ''}">Skills Builder</span>
+        </div>
+        <div class="soft-note" style="margin-top:12px;">Badges help you see progress and will become stronger employer-facing signals as the platform grows.</div>
+      </div>
+
+      <div class="card span-3"><div class="label">Career Passport</div><div class="metric">${completion}%</div><div class="label">Profile readiness score</div></div>
+      <div class="card span-3"><div class="label">Verified matches</div><div class="metric">${verifiedMatches.length}</div><div class="label">Opportunities available to explore</div></div>
+      <div class="card span-3"><div class="label">Saved pathways</div><div class="metric">${savedCount}</div><div class="label">Opportunities and training saved</div></div>
+      <div class="card span-3"><div class="label">Applications</div><div class="metric">${applicationsCount}</div><div class="label">Submitted opportunities</div></div>
+
+      <div class="card span-8">
+        <div class="section-title"><div><h3>Best matches for you</h3><p class="label">Ranked using your skills, interests, education and location.</p></div><button class="secondary" onclick="setView('opportunities')">View all</button></div>
+        ${verifiedMatches.slice(0, 3).length ? verifiedMatches.slice(0, 3).map(j => jobCard(j, true)).join('') : `
+          <div class="empty-card"><h4>No verified matches yet</h4><p class="label">Once verified opportunities are available, your strongest matches will appear here automatically.</p><button class="secondary" onclick="setView('opportunities')">Browse opportunities</button></div>
+        `}
+      </div>
+
+      <div class="card span-4 careergps-card">
+        <div class="section-title"><h3>CareerGPS quick guide</h3><span class="pill pill-trust">Personal coach</span></div>
+        <p class="label">Use CareerGPS to understand your readiness score, target opportunity fit, skills gaps and recommended training pathways.</p>
+        <div class="criteria-list" style="margin-top:14px;">
+          <div class="criteria-item ${state.profile.skills ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">${state.profile.skills ? '✓' : '!'}</div><div><b>Skills added</b><p class="label">${state.profile.skills ? 'Your skills are visible for matching.' : 'Add skills to improve matching.'}</p></div></div>
+          <div class="criteria-item ${state.profile.education ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">${state.profile.education ? '✓' : '!'}</div><div><b>Education added</b><p class="label">${state.profile.education ? 'Education helps filter relevant roles.' : 'Add education level.'}</p></div></div>
+          <div class="criteria-item ${state.profile.availability ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">${state.profile.availability ? '✓' : '!'}</div><div><b>Availability added</b><p class="label">${state.profile.availability ? 'Employers can see readiness.' : 'Add when you can start.'}</p></div></div>
+        </div>
+        <button class="primary full" style="margin-top:14px;" onclick="document.getElementById('careerTwinNavBtn')?.click()">Open CareerGPS</button>
+      </div>
+
+      <div class="card span-6">
+        <div class="section-title"><h3>Recommended skills pathways</h3><button class="secondary" onclick="setView('training')">View training</button></div>
         ${state.courses.length ? state.courses.slice(0,4).map(c => `<p><b>${escapeHtml(c.title)}</b><br><span class="label">${escapeHtml(c.provider)} • ${escapeHtml(c.mode)} • ${escapeHtml(c.duration)}</span></p>`).join('') : `<div class="empty-card"><h4>No verified training offers yet</h4><p class="label">Training pathways will appear here as verified institutions publish relevant offers.</p><button class="secondary" onclick="setView('training')">Browse training</button></div>`}
+      </div>
+
+      <div class="card span-6 invite-card">
+        ${socialSharingCentre(true)}
+      </div>
+
+      <div class="card span-6 invite-card">
+        <div class="section-title"><h3>Grow the youth movement</h3><span class="pill">Coming soon: referrals</span></div>
+        <p class="label">Jobs4Youth becomes more powerful when youth, employers and institutions join together. Invite classmates, colleagues, training providers and youth groups to build a stronger opportunity network.</p>
+        <div class="notice"><b>Growth idea:</b> every youth who invites 3 verified users can earn a Community Builder badge once referral tracking is activated.</div>
+        <div class="hero-actions" style="margin-top:14px;"><button class="secondary" onclick="setView('contact')">Suggest a partner</button><button class="secondary" onclick="setView('about')">Learn about Jobs4Youth</button></div>
       </div>
     </div>
   `;
@@ -1630,6 +1782,7 @@ function opportunities() {
           <span class="pill pill-trust">Platform-moderated public marketplace</span>
         </div>
         <div class="notice trust-notice"><b>Trust signal:</b> Jobs4Youth highlights moderated, structured listings to improve public confidence and reduce misleading vacancies.</div>
+        <div class="notice"><b>Before you apply:</b> never pay application or interview fees. Use the Report suspicious button if a listing asks for money, requests unusual documents, or redirects you to unsafe channels.</div>
         <div style="margin-top:14px;">
           ${list.length ? list.map(j => jobCard(j, true)).join('') : `
             <div class="empty-card">
@@ -1712,6 +1865,7 @@ function youthProfileForm() {
       <label>Region / City<input id="profileRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
       ${actionSelect('Education','profileEducation', OPTION_SETS.educationLevels, state.profile.education, 'Choose education')}
       ${actionSelect('Availability','profileAvailability', OPTION_SETS.availability, state.profile.availability, 'Choose availability')}
+      ${actionSelect('Young women inclusion indicator','profileGender', OPTION_SETS.genderOptions, state.profile.gender, 'Choose optional indicator')}
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
       <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
@@ -1796,16 +1950,513 @@ function profile() {
   return `<div class="grid"><div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}</div></div>`;
 }
 
+
+
+
+function getReferralState() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_referral_state') || '{}');
+  } catch (error) {
+    return {};
+  }
+}
+function saveReferralState(data) {
+  try {
+    localStorage.setItem('jobs4youth_referral_state', JSON.stringify(data || {}));
+  } catch (error) {
+    console.warn('Could not save referral state:', error);
+  }
+}
+function getReferralCode() {
+  const existing = getReferralState();
+  if (existing.referralCode) return existing.referralCode;
+  const base = (state.profile?.name || currentUser?.email || 'J4Y').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'J4Y';
+  const code = `${base}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  saveReferralState({ ...existing, referralCode: code, friendsInvited: existing.friendsInvited || 0, signupsTracked: existing.signupsTracked || 0 });
+  return code;
+}
+function getReferralUrl() {
+  const code = getReferralCode();
+  const baseUrl = window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://jobs4youth.org';
+  return `${baseUrl}${window.location.pathname || '/'}?ref=${encodeURIComponent(code)}`;
+}
+function getChampionStats() {
+  const data = getReferralState();
+  const friendsInvited = Number(data.friendsInvited || 0);
+  const signupsTracked = Number(data.signupsTracked || 0);
+  const points = friendsInvited * 5 + signupsTracked * 25;
+  let level = 'Starter Champion';
+  let nextTarget = 50;
+  if (friendsInvited >= 1000 || signupsTracked >= 250) { level = 'Platinum Champion'; nextTarget = 1000; }
+  else if (friendsInvited >= 500 || signupsTracked >= 100) { level = 'Gold Champion'; nextTarget = 1000; }
+  else if (friendsInvited >= 200 || signupsTracked >= 40) { level = 'Silver Champion'; nextTarget = 500; }
+  else if (friendsInvited >= 50 || signupsTracked >= 10) { level = 'Bronze Champion'; nextTarget = 200; }
+  return { friendsInvited, signupsTracked, points, level, nextTarget, referralCode: getReferralCode(), referralUrl: getReferralUrl() };
+}
+function trackInviteClick(channel = 'Share') {
+  const data = getReferralState();
+  saveReferralState({ ...data, friendsInvited: Number(data.friendsInvited || 0) + 1, lastInviteChannel: channel, lastInviteAt: new Date().toISOString() });
+}
+window.shareJobs4Youth = function(channel = 'whatsapp') {
+  const url = getReferralUrl();
+  const message = `Join me on Jobs4Youth. Build your Career Passport, discover verified jobs and internships, access training pathways and use CareerGPS to improve your readiness: ${url}`;
+  trackInviteClick(channel);
+  if (channel === 'whatsapp') {
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    return;
+  }
+  if (channel === 'facebook') {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener');
+    return;
+  }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(message).then(() => showUserMessage('Invite message copied. Share it with classmates, youth groups, employers or training providers.'));
+  } else {
+    prompt('Copy your Jobs4Youth invite message:', message);
+  }
+};
+window.copyReferralLink = function() {
+  const url = getReferralUrl();
+  trackInviteClick('copy-link');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => showUserMessage('Referral link copied.'));
+  } else {
+    prompt('Copy your referral link:', url);
+  }
+};
+window.trackChampionSignup = function() {
+  const data = getReferralState();
+  saveReferralState({ ...data, signupsTracked: Number(data.signupsTracked || 0) + 1, lastTrackedSignupAt: new Date().toISOString() });
+  showUserMessage('Signup tracked locally for your Champion progress. In production this should be connected to live referral signups.');
+  render();
+};
+function launchBanner() {
+  return `
+    <div class="card span-12 launch-banner-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Jobs4Youth is live</div>
+          <h3>Build your Career Passport and invite others to join Africa's youth opportunity movement</h3>
+          <p class="label">Discover verified opportunities, access training pathways, use CareerGPS and help classmates or youth groups find safer routes to work.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="primary" onclick="openSignup()">Create account</button>
+          <button class="secondary" onclick="shareJobs4Youth('whatsapp')">Share on WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function socialSharingCentre(compact = false) {
+  const stats = getChampionStats();
+  return `
+    <div class="card ${compact ? '' : 'span-12'} social-sharing-centre">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Growth engine</div>
+          <h3>Invite youth, employers and training providers</h3>
+          <p class="label">Use your referral link to bring classmates, youth groups and partners into Jobs4Youth. Your Champion progress is tracked locally in this version.</p>
+        </div>
+        <span class="pill pill-verified">${escapeHtml(stats.level)}</span>
+      </div>
+      <div class="pathway-summary-row">
+        <span class="pathway-summary-item"><strong>Referral code:</strong>&nbsp;${escapeHtml(stats.referralCode)}</span>
+        <span class="pathway-summary-item"><strong>Friends invited:</strong>&nbsp;${stats.friendsInvited}</span>
+        <span class="pathway-summary-item"><strong>Tracked signups:</strong>&nbsp;${stats.signupsTracked}</span>
+        <span class="pathway-summary-item"><strong>Champion points:</strong>&nbsp;${stats.points}</span>
+      </div>
+      <div class="hero-actions" style="margin-top:14px;">
+        <button class="primary" onclick="shareJobs4Youth('whatsapp')">Share on WhatsApp</button>
+        <button class="secondary" onclick="shareJobs4Youth('facebook')">Share on Facebook</button>
+        <button class="secondary" onclick="copyReferralLink()">Copy referral link</button>
+        <button class="secondary" onclick="trackChampionSignup()">Track signup manually</button>
+      </div>
+    </div>
+  `;
+}
+function campusChampions() {
+  const stats = getChampionStats();
+  const progressWidth = Math.min(100, Math.round((stats.friendsInvited / Math.max(stats.nextTarget, 1)) * 100));
+  return `
+    <div class="grid campus-champions-page">
+      <div class="card span-12 champion-hero-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Jobs4Youth Campus Champions</div>
+            <h3>Lead. Connect. Inspire. Empower.</h3>
+            <p class="label">Campus Champions help students and young people join Jobs4Youth, build Career Passports, discover verified opportunities and connect with training pathways.</p>
+          </div>
+          <div class="hero-actions"><button class="primary" onclick="shareJobs4Youth('whatsapp')">Invite youth now</button><button class="secondary" onclick="setView('universities')">University onboarding</button></div>
+        </div>
+      </div>
+      ${socialSharingCentre(false)}
+      <div class="card span-6">
+        <div class="section-title"><h3>Your Champion progress</h3><span class="pill pill-verified">${escapeHtml(stats.level)}</span></div>
+        <div class="metric">${stats.points}</div>
+        <p class="label">Champion points from invites and tracked signups.</p>
+        <div class="chartbar"><div style="width:${progressWidth}%"></div></div>
+        <p class="label" style="margin-top:10px;">Progress to next invite milestone: ${stats.friendsInvited}/${stats.nextTarget}</p>
+      </div>
+      <div class="card span-6">
+        <div class="section-title"><h3>Champion levels</h3><span class="pill">Recognition pathway</span></div>
+        <div class="criteria-list">
+          <div class="criteria-item ${stats.friendsInvited >= 50 ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">1</div><div><b>Bronze Champion</b><p class="label">50 youth invited or 10 tracked signups.</p></div></div>
+          <div class="criteria-item ${stats.friendsInvited >= 200 ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">2</div><div><b>Silver Champion</b><p class="label">200 youth invited or 40 tracked signups.</p></div></div>
+          <div class="criteria-item ${stats.friendsInvited >= 500 ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">3</div><div><b>Gold Champion</b><p class="label">500 youth invited or 100 tracked signups.</p></div></div>
+          <div class="criteria-item ${stats.friendsInvited >= 1000 ? 'criteria-pass' : 'criteria-watch'}"><div class="criteria-icon">4</div><div><b>Platinum Champion</b><p class="label">1,000 youth invited or 250 tracked signups.</p></div></div>
+        </div>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>What Campus Champions do</h3><span class="pill pill-trust">Launch playbook</span></div>
+        <div class="trust-grid">
+          <div class="trust-card"><h4>Recruit youth</h4><p class="label">Invite classmates, WhatsApp groups, youth clubs and alumni networks to create Career Passports.</p></div>
+          <div class="trust-card"><h4>Host onboarding sessions</h4><p class="label">Run short demos showing how to complete profiles, use CareerGPS, save opportunities and apply safely.</p></div>
+          <div class="trust-card"><h4>Source opportunities</h4><p class="label">Identify employers and training providers that can post verified opportunities or learning pathways.</p></div>
+          <div class="trust-card"><h4>Share feedback</h4><p class="label">Collect youth feedback on barriers, missing sectors, trust concerns and new features needed.</p></div>
+        </div>
+      </div>
+      <div class="card span-12 champion-badge-card">
+        <div class="section-title">
+          <div><h3>Proud to be a Jobs4Youth Champion</h3><p class="label">Use this badge text on LinkedIn, WhatsApp status or student group announcements.</p></div>
+          <button class="secondary" onclick="copyReferralLink()">Copy my referral link</button>
+        </div>
+        <div class="notice"><b>Badge text:</b> I am a Jobs4Youth Campus Champion, helping young people build Career Passports, access verified opportunities and move toward dignified work.</div>
+      </div>
+    </div>
+  `;
+}
+function universitiesPage() {
+  return `
+    <div class="grid university-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">University and TVET onboarding</div>
+            <h3>The Career Passport platform for students and graduates</h3>
+            <p class="label">Jobs4Youth helps universities, TVETs and agricultural colleges connect students to verified opportunities, skills pathways and employability intelligence.</p>
+          </div>
+          <div class="hero-actions"><button class="primary" onclick="setView('contact')">Request onboarding</button><button class="secondary" onclick="shareJobs4Youth('whatsapp')">Share with a student group</button></div>
+        </div>
+      </div>
+      <div class="card span-6">
+        <h3>Onboarding plan</h3>
+        <div class="criteria-list" style="margin-top:14px;">
+          <div class="criteria-item criteria-pass"><div class="criteria-icon">1</div><div><b>Launch demo</b><p class="label">Run a 30-minute orientation for students and career offices.</p></div></div>
+          <div class="criteria-item criteria-pass"><div class="criteria-icon">2</div><div><b>Profile completion sprint</b><p class="label">Help students complete Career Passports and add skills, interests and availability.</p></div></div>
+          <div class="criteria-item criteria-pass"><div class="criteria-icon">3</div><div><b>Opportunity matching week</b><p class="label">Guide students to save opportunities, training pathways and submit stronger applications.</p></div></div>
+          <div class="criteria-item criteria-pass"><div class="criteria-icon">4</div><div><b>Insights report</b><p class="label">Share skills demand, training gaps and student readiness insights with the institution.</p></div></div>
+        </div>
+      </div>
+      <div class="card span-6">
+        <h3>Value for institutions</h3>
+        <div class="trust-grid single-column">
+          <div class="trust-card"><h4>Graduate employability analytics</h4><p class="label">Understand student readiness, skills gaps and opportunity interests.</p></div>
+          <div class="trust-card"><h4>Employer connections</h4><p class="label">Invite employers to post internships, apprenticeships and entry-level opportunities.</p></div>
+          <div class="trust-card"><h4>Training alignment</h4><p class="label">Use demand signals to improve short courses, bootcamps and career services.</p></div>
+        </div>
+      </div>
+      <div class="card span-12">
+        <div class="section-title"><h3>Employer recruitment email template</h3><button class="secondary" onclick="copyEmployerEmailTemplate()">Copy template</button></div>
+        <div class="support-admin-note"><b>Subject:</b> Find Job-Ready Youth Faster with Jobs4Youth<br><br>Hello,<br><br>Jobs4Youth is helping employers connect with verified, job-ready young talent. Through the platform, employers can post vacancies, receive structured applications, use candidate match scores and build youth talent pipelines. Participation is free during our growth phase. We would be delighted to onboard your organisation.<br><br>Register here: ${escapeHtml(window.location.origin || 'https://jobs4youth.org')}<br><br>Best regards,<br>Jobs4Youth Team</div>
+      </div>
+    </div>
+  `;
+}
+window.copyEmployerEmailTemplate = function() {
+  const body = `Subject: Find Job-Ready Youth Faster with Jobs4Youth\n\nHello,\n\nJobs4Youth is helping employers connect with verified, job-ready young talent. Through the platform, employers can post vacancies, receive structured applications, use candidate match scores and build youth talent pipelines. Participation is free during our growth phase. We would be delighted to onboard your organisation.\n\nRegister here: ${window.location.origin || 'https://jobs4youth.org'}\n\nBest regards,\nJobs4Youth Team`;
+  if (navigator.clipboard) navigator.clipboard.writeText(body).then(() => showUserMessage('Employer recruitment email copied.'));
+  else prompt('Copy employer email template:', body);
+};
+function launchToolkit() {
+  return `
+    <div class="grid launch-toolkit-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div><div class="kicker">Launch toolkit</div><h3>Ready-to-use growth copy for Jobs4Youth</h3><p class="label">Use these messages for partners, funders and youth sign-up campaigns.</p></div>
+          <button class="primary" onclick="shareJobs4Youth('whatsapp')">Share Jobs4Youth</button>
+        </div>
+      </div>
+      <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
+      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
+    </div>
+  `;
+}
+
+function isYoungWomanProfile(profile = state.profile, role = state.role) {
+  return role === 'youth' && String(profile?.gender || '').toLowerCase().includes('woman');
+}
+function getImpactMetrics() {
+  const verifiedOpportunities = (state.jobs || []).filter(job => job.status === 'Verified').length;
+  const verifiedTraining = (state.courses || []).filter(course => course.status === 'Verified').length;
+  const applicationsSubmitted = (state.applications || []).length + (state.employerCandidates || []).length;
+  const visibleYouthReached = Number((state.signalLayer?.countrySignals || []).reduce((sum, item) => sum + Number(item.youthProfiles || 0), 0)) || (state.role === 'youth' ? 1 : 0);
+  const youngWomenReached = isYoungWomanProfile() ? 1 : 0;
+  const skillGapCount = Number((state.signalLayer?.skillGap || []).reduce((sum, item) => sum + Number(item.gapCount || 0), 0)) || 0;
+  const trainingGapCount = Number((state.signalLayer?.trainingGap || []).reduce((sum, item) => sum + Number(item.trainingGapCount || 0), 0)) || 0;
+  const savedLearning = (state.savedCourses || []).length;
+  const skillsGapsClosedProxy = Math.max(0, savedLearning + Math.min(applicationsSubmitted, verifiedTraining));
+  return {
+    visibleYouthReached,
+    youngWomenReached,
+    applicationsSubmitted,
+    verifiedOpportunities,
+    verifiedTraining,
+    skillGapCount,
+    trainingGapCount,
+    skillsGapsClosedProxy,
+    countriesTracked: (state.signalLayer?.countrySignals || []).length || new Set([...(state.jobs || []).map(j => j.country), ...(state.courses || []).map(c => c.country)].filter(Boolean)).size
+  };
+}
+function impactMetricCard(titleText, value, bodyText, badge = '') {
+  return `
+    <div class="card span-3 impact-metric-card">
+      <div class="section-title"><div class="label">${escapeHtml(titleText)}</div>${badge ? `<span class="pill">${escapeHtml(badge)}</span>` : ''}</div>
+      <div class="metric">${escapeHtml(String(value))}</div>
+      <div class="label">${escapeHtml(bodyText)}</div>
+    </div>
+  `;
+}
+function countryIntelligencePanel() {
+  const countries = signalTopItems(state.signalLayer?.countrySignals || [], 8);
+  const fallbackCountries = Object.values([...(state.jobs || []), ...(state.courses || [])].reduce((acc, item) => {
+    const country = item.country || 'Unspecified';
+    acc[country] = acc[country] || { country, youthProfiles: 0, employers: 0, institutions: 0, verifiedOpportunities: 0, verifiedCourses: 0, applicationsTotal: 0 };
+    if (item.title && item.org && item.status === 'Verified') acc[country].verifiedOpportunities += 1;
+    if (item.provider && item.status === 'Verified') acc[country].verifiedCourses += 1;
+    return acc;
+  }, {}));
+  const list = countries.length ? countries : fallbackCountries;
+  return `
+    <div class="card span-12 country-intelligence-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Country-level labour-market intelligence</div>
+          <h3>Where youth demand, opportunities and training pathways are emerging</h3>
+          <p class="label">This view helps funders, governments and delivery partners identify activity patterns by country and spot where ecosystem support is needed.</p>
+        </div>
+        <span class="pill pill-trust">Partner intelligence view</span>
+      </div>
+      <div class="mini-grid ${list.length > 3 ? '' : 'single-column'}">
+        ${list.length ? list.map(item => `
+          <div class="mini-card">
+            <div class="section-title">
+              <div><h4>${escapeHtml(item.country || 'Unspecified')}</h4><p class="label">Youth: ${item.youthProfiles || 0} • Employers: ${item.employers || 0} • Institutions: ${item.institutions || 0}</p></div>
+              <span class="pill pill-verified">${item.verifiedOpportunities || 0} opportunities</span>
+            </div>
+            <p class="label">Training pathways: ${item.verifiedCourses || 0} • Applications: ${item.applicationsTotal || 0}</p>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>No country intelligence yet</h4><p class="label">Country intelligence will populate as youth profiles, opportunities, training offers and applications grow.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+function impactEvidence() {
+  const m = getImpactMetrics();
+  const topDemand = signalTopItems(state.signalLayer?.skillDemand || [], 5);
+  const topGaps = signalTopItems(state.signalLayer?.skillGap || [], 5);
+  const trainingGaps = signalTopItems(state.signalLayer?.trainingGap || [], 5);
+  return `
+    <div class="grid impact-evidence-page">
+      <div class="card span-12 impact-hero-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Funder-ready impact evidence</div>
+            <h3>Jobs4Youth impact dashboard</h3>
+            <p class="label">A live evidence layer for tracking youth reach, young women inclusion, applications, verified opportunities, training pathways, skills gaps and country-level labour-market intelligence.</p>
+          </div>
+          <div class="hero-actions"><button class="primary" onclick="openSignup()">Join the platform</button><button class="secondary" onclick="setView('contact')">Discuss partnership</button></div>
+        </div>
+        <div class="notice"><b>Evidence principle:</b> Jobs4Youth is being designed to move beyond counting vacancies. It tracks the pathway from youth profile creation to readiness, skills development, applications and market intelligence.</div>
+      </div>
+
+      ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
+      ${impactMetricCard('Young women reached', m.youngWomenReached, 'Gender-responsive indicator based on visible youth profile gender information. Expand after adding aggregate gender reporting.', 'Inclusion')}
+      ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
+      ${impactMetricCard('Verified opportunities', m.verifiedOpportunities, 'Moderated roles publicly visible to youth.', 'Trust')}
+      ${impactMetricCard('Training pathways', m.verifiedTraining, 'Verified learning offers that can close skills gaps.', 'Skills')}
+      ${impactMetricCard('Skills gaps closed', m.skillsGapsClosedProxy, 'Proxy indicator using saved training and applications until completion tracking is added.', 'Proxy')}
+      ${impactMetricCard('Open skill gaps', m.skillGapCount, 'Unmet demand signals from opportunity requirements versus visible youth skills.', 'Market signal')}
+      ${impactMetricCard('Countries tracked', m.countriesTracked, 'Countries with visible platform activity across opportunities, training or signal data.', 'Scale')}
+
+      <div class="card span-4">
+        <div class="section-title"><h3>Most requested skills</h3><span class="pill pill-verified">Demand</span></div>
+        ${topDemand.length ? topDemand.map(item => `<p><b>${escapeHtml(item.skillName)}</b><br><span class="label">${escapeHtml(item.country || '')}${item.region ? ' • ' + escapeHtml(item.region) : ''} • ${item.opportunitiesCount || 0} opportunities</span></p>`).join('') : `<div class="empty-card"><h4>No demand signals yet</h4><p class="label">Verified opportunity skill requirements will populate this panel.</p></div>`}
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Largest youth skill gaps</h3><span class="pill">Supply gap</span></div>
+        ${topGaps.length ? topGaps.map(item => `<p><b>${escapeHtml(item.skillName)}</b><br><span class="label">Demand: ${item.demandOpportunities || 0} • Youth supply: ${item.youthSupply || 0} • Gap: ${item.gapCount || 0}</span></p>`).join('') : `<div class="empty-card"><h4>No skill gap data yet</h4><p class="label">Skill gaps will strengthen as youth profiles and opportunity requirements grow.</p></div>`}
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Training gaps</h3><span class="pill">Institution signal</span></div>
+        ${trainingGaps.length ? trainingGaps.map(item => `<p><b>${escapeHtml(item.skillName)}</b><br><span class="label">Demand: ${item.demandOpportunities || 0} • Courses: ${item.verifiedCoursesCoveringSkill || 0} • Gap: ${item.trainingGapCount || 0}</span></p>`).join('') : `<div class="empty-card"><h4>No training gap data yet</h4><p class="label">Training gaps will show where institutions can create new pathways.</p></div>`}
+      </div>
+
+      ${countryIntelligencePanel()}
+
+      <div class="card span-12 partner-proof-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Why funders should care</div>
+            <h3>Jobs4Youth converts platform activity into measurable youth employment evidence</h3>
+            <p class="label">The dashboard is structured around a funder logic model: reach youth, include young women, verify opportunities, connect applications, guide training pathways, close skills gaps and generate country intelligence.</p>
+          </div>
+          <span class="pill pill-verified">Impact evidence layer</span>
+        </div>
+        <div class="trust-grid">
+          <div class="trust-card"><h4>Reach</h4><p class="label">Track how many young people are visible in the system and where activity is growing.</p></div>
+          <div class="trust-card"><h4>Inclusion</h4><p class="label">Add gender-responsive reporting so partners can monitor young women reached and supported.</p></div>
+          <div class="trust-card"><h4>Pathways</h4><p class="label">Connect youth profiles to applications, training pathways and readiness improvements.</p></div>
+          <div class="trust-card"><h4>Systems change</h4><p class="label">Use country and skills intelligence to improve decisions by employers, institutions, governments and donors.</p></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getEmployerShortlist() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_employer_shortlist') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveEmployerShortlist(items) {
+  try {
+    localStorage.setItem('jobs4youth_employer_shortlist', JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save employer shortlist:', error);
+  }
+}
+function isCandidateShortlisted(candidateId) {
+  return getEmployerShortlist().some(item => String(item.candidateId) === String(candidateId));
+}
+window.shortlistCandidate = function(candidateId) {
+  const candidate = (state.employerCandidates || []).find(item => String(item.id) === String(candidateId));
+  if (!candidate) return showUserMessage('Candidate not found. Please refresh and try again.');
+  const current = getEmployerShortlist();
+  if (current.some(item => String(item.candidateId) === String(candidateId))) {
+    showUserMessage('This candidate is already in your shortlist.');
+    return;
+  }
+  current.unshift({
+    candidateId: candidate.id,
+    applicantName: candidate.applicantName,
+    opportunityTitle: candidate.opportunityTitle,
+    candidateEmail: candidate.applicantEmail || '',
+    matchScore: candidateMatchScore(candidate),
+    createdAt: new Date().toISOString()
+  });
+  saveEmployerShortlist(current.slice(0, 100));
+  showUserMessage('Candidate added to employer shortlist.');
+  render();
+};
+window.removeShortlistedCandidate = function(candidateId) {
+  const next = getEmployerShortlist().filter(item => String(item.candidateId) !== String(candidateId));
+  saveEmployerShortlist(next);
+  render();
+};
+function candidateMatchScore(candidate) {
+  const matchingJob = (state.jobs || []).find(job => String(job.title || '').toLowerCase() === String(candidate.opportunityTitle || '').toLowerCase()) || {};
+  const candidateWords = new Set(words([candidate.skills, candidate.education, candidate.experience, candidate.region, candidate.country].join(' ')));
+  const jobWords = words([matchingJob.skills, matchingJob.education, matchingJob.experience, matchingJob.region, matchingJob.country, matchingJob.type].join(' '));
+  let hits = 0;
+  jobWords.forEach(item => { if (candidateWords.has(item)) hits += 1; });
+  let score = jobWords.length ? Math.round((hits / Math.max(jobWords.length, 1)) * 65) + 25 : 55;
+  if (candidate.country && matchingJob.country && candidate.country === matchingJob.country) score += 8;
+  if (candidate.region && matchingJob.region && candidate.region === matchingJob.region) score += 7;
+  if (candidate.skills) score += 5;
+  if (candidate.education) score += 3;
+  return Math.min(98, Math.max(35, score));
+}
+function employerTrustBadge() {
+  if (state.profile.verified) return `<span class="pill pill-verified">Verified employer trust badge</span>`;
+  return `<span class="pill">Verification pending</span>`;
+}
+function employerConversionPanel() {
+  return `
+    <div class="card span-12 employer-conversion-panel">
+      <div class="section-title">
+        <div>
+          <div class="kicker">For employers</div>
+          <h3>Find job-ready youth faster, with better signals and less noise</h3>
+          <p class="label">Post verified opportunities, receive structured applications, compare candidate match scores and shortlist promising youth through a more trusted hiring workflow.</p>
+        </div>
+        <button class="primary" onclick="openSignup()">Create employer account</button>
+      </div>
+      <div class="trust-grid">
+        <div class="trust-card"><h4>Verified employer presence</h4><p class="label">Build confidence with organisation profiles, verification documents and trust badges.</p></div>
+        <div class="trust-card"><h4>Candidate match score</h4><p class="label">Quickly see which applicants best align with role skills, location, education and experience needs.</p></div>
+        <div class="trust-card"><h4>Shortlist faster</h4><p class="label">Save promising candidates into a structured shortlist for follow-up and interviews.</p></div>
+        <div class="trust-card"><h4>Hiring intelligence</h4><p class="label">Track posted roles, applications received, thin pipelines and candidate readiness signals.</p></div>
+      </div>
+    </div>
+  `;
+}
+
 function employerDash() {
   const myJobs = currentUser ? state.jobs.filter(j => j.postedBy === currentUser.id) : [];
   const completion = organisationProfileCompletion();
+  const activeJobs = myJobs.filter(j => j.status === 'Verified').length;
+  const pendingJobs = myJobs.filter(j => j.status === 'Pending').length;
+  const candidates = state.employerCandidates || [];
+  const shortlist = getEmployerShortlist();
+  const strongMatches = candidates.filter(candidate => candidateMatchScore(candidate) >= 75).length;
+  const thinPipelines = myJobs.filter(job => !candidates.some(candidate => candidate.opportunityTitle === job.title)).length;
   return `
-    ${onboardingPanel()}
-    ${completionCard('Employer profile readiness', completion, 'A stronger employer profile improves confidence before candidates engage with your opportunities.', 'Complete employer profile')}
-    ${metrics()}
-    <div class="grid" style="margin-top:18px">
-      <div class="card span-7"><div class="section-title"><h3>Your posted opportunities</h3><button class="secondary" onclick="setView('post opportunity')">Post new</button></div>${myJobs.length ? myJobs.map(j => jobCard(j, false)).join('') : `<div class="empty-card"><h4>No opportunities posted yet</h4><p class="label">Complete your organisation profile, then publish your first moderated opportunity to start attracting candidates.</p><button class="secondary" onclick="setView('post opportunity')">Post your first opportunity</button></div>`}</div>
-      <div class="card span-5"><h3>Applications received</h3><div class="metric">${state.employerCandidates.length}</div><p class="label">Candidates who applied to your posted opportunities.</p><button class="secondary" onclick="setView('candidates')">Open candidates</button></div>
+    <div class="grid employer-command-centre">
+      <div class="card span-12 employer-hero-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Employer hiring cockpit</div>
+            <h3>Find job-ready youth faster</h3>
+            <p class="label">Post trusted opportunities, receive structured applications, compare candidate match scores and build a shortlist of promising young talent.</p>
+          </div>
+          <div class="job-badges">${employerTrustBadge()}<span class="pill">${completion}% profile complete</span></div>
+        </div>
+        <div class="hero-actions" style="margin-top:14px;">
+          <button class="primary" onclick="setView('post opportunity')">Post a real opportunity</button>
+          <button class="secondary" onclick="setView('candidates')">Review candidates</button>
+          <button class="secondary" onclick="setView('profile')">Strengthen trust badge</button>
+        </div>
+      </div>
+
+      <div class="card span-3"><div class="label">Posted roles</div><div class="metric">${myJobs.length}</div><div class="label">All opportunities created by your account</div></div>
+      <div class="card span-3"><div class="label">Verified live roles</div><div class="metric">${activeJobs}</div><div class="label">Publicly visible after moderation</div></div>
+      <div class="card span-3"><div class="label">Candidate applications</div><div class="metric">${candidates.length}</div><div class="label">Structured applications received</div></div>
+      <div class="card span-3"><div class="label">Shortlisted youth</div><div class="metric">${shortlist.length}</div><div class="label">Saved for follow-up review</div></div>
+
+      <div class="card span-8">
+        <div class="section-title"><div><h3>Your hiring pipeline</h3><p class="label">Track which vacancies are live, pending, receiving candidates or need more promotion.</p></div><button class="secondary" onclick="setView('post opportunity')">Post new</button></div>
+        <div class="detail-two-column">
+          <div class="detail-box"><h4>Strong candidate matches</h4><div class="metric">${strongMatches}</div><p class="label">Applicants scoring 75% or higher against role signals.</p></div>
+          <div class="detail-box"><h4>Thin pipelines</h4><div class="metric">${thinPipelines}</div><p class="label">Posted roles with no visible applications yet.</p></div>
+          <div class="detail-box"><h4>Pending review</h4><div class="metric">${pendingJobs}</div><p class="label">Roles waiting for admin verification before stronger visibility.</p></div>
+          <div class="detail-box"><h4>Trust readiness</h4><div class="metric">${completion}%</div><p class="label">Organisation profile completeness and employer credibility signal.</p></div>
+        </div>
+        <div class="notice" style="margin-top:14px;"><b>Conversion message:</b> Employers win on Jobs4Youth by posting clear, verified roles and using match scores to focus on the most relevant youth first.</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="section-title"><h3>Employer trust badge</h3>${employerTrustBadge()}</div>
+        <p class="label">Youth are more likely to apply when an employer profile looks complete, verified and professional.</p>
+        ${completionCard('Employer profile readiness', completion, 'Complete organisation details and upload verification documents to strengthen public trust.', 'Complete employer profile')}
+      </div>
+
+      <div class="card span-7">
+        <div class="section-title"><h3>Your posted opportunities</h3><button class="secondary" onclick="setView('post opportunity')">Post new</button></div>
+        ${myJobs.length ? myJobs.map(j => jobCard(j, false)).join('') : `<div class="empty-card"><h4>No opportunities posted yet</h4><p class="label">Post your first clear, youth-friendly opportunity to start attracting matched candidates.</p><button class="primary" onclick="setView('post opportunity')">Post your first opportunity</button></div>`}
+      </div>
+
+      <div class="card span-5">
+        <div class="section-title"><h3>Shortlisted candidates</h3><button class="secondary" onclick="setView('candidates')">Open candidates</button></div>
+        ${shortlist.length ? shortlist.slice(0, 5).map(item => `
+          <div class="shortlist-item-card">
+            <div><h4>${escapeHtml(item.applicantName || 'Candidate')}</h4><p class="label">${escapeHtml(item.opportunityTitle || 'Opportunity')} • Match ${item.matchScore || 0}%</p></div>
+            <button class="secondary" onclick="removeShortlistedCandidate('${escapeHtml(item.candidateId)}')">Remove</button>
+          </div>
+        `).join('') : `<div class="empty-card"><h4>No shortlisted candidates yet</h4><p class="label">Open candidate applications and shortlist promising youth for follow-up.</p><button class="secondary" onclick="setView('candidates')">Review candidates</button></div>`}
+      </div>
     </div>
   `;
 }
@@ -1868,10 +2519,53 @@ window.submitOpportunity = async function() {
 };
 
 function candidates() {
+  const candidates = state.employerCandidates || [];
   return `
-    <div class="card"><div class="section-title"><h3>Candidate applications</h3><button class="secondary" onclick="setView('post opportunity')">Post another opportunity</button></div>${state.employerCandidates.length ? state.employerCandidates.map(c => `
-      <div class="job"><div><h3>${escapeHtml(c.applicantName)}</h3><p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p><p>${escapeHtml(c.skills || 'No skills listed.')}</p><div><span class="pill">${escapeHtml(c.status)}</span>${c.applicantEmail ? `<span class="pill">${escapeHtml(c.applicantEmail)}</span>` : ''}${c.experience ? `<span class="pill">${escapeHtml(c.experience)}</span>` : ''}</div></div><div class="fit" style="--score:76"><span>76%</span></div></div>
-    `).join('') : `<div class="empty-card"><h4>No applications received yet</h4><p class="label">Once candidates apply to your opportunities, they will appear here with profile details for review.</p><button class="secondary" onclick="setView('post opportunity')">Post opportunity</button></div>`}</div>
+    <div class="grid candidate-review-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Candidate review</div>
+            <h3>Prioritise the most relevant youth first</h3>
+            <p class="label">Use candidate match scores, profile signals and shortlisting to move faster from application volume to hiring quality.</p>
+          </div>
+          <button class="primary" onclick="setView('post opportunity')">Post another opportunity</button>
+        </div>
+        <div class="notice"><b>Hiring tip:</b> Start with candidates above 75%, then review motivation and availability before inviting candidates for the next step.</div>
+      </div>
+      <div class="card span-12">
+        ${candidates.length ? candidates.map(c => {
+          const score = candidateMatchScore(c);
+          const shortlisted = isCandidateShortlisted(c.id);
+          const scoreClass = score >= 75 ? 'readiness-strong' : score >= 55 ? 'readiness-medium' : 'readiness-emerging';
+          return `
+            <div class="job candidate-match-card ${shortlisted ? 'job-verified' : ''}">
+              <div>
+                <div class="job-header-row">
+                  <h3>${escapeHtml(c.applicantName)}</h3>
+                  <div class="job-badges">
+                    ${statusBadge(c.status)}
+                    ${shortlisted ? '<span class="pill pill-verified">Shortlisted</span>' : '<span class="pill">Not shortlisted</span>'}
+                  </div>
+                </div>
+                <p><b>${escapeHtml(c.opportunityTitle)}</b> • ${escapeHtml(c.region)}, ${escapeHtml(c.country)} • ${escapeHtml(c.education || 'Education not provided')}</p>
+                <p>${escapeHtml(c.skills || 'No skills listed.')}</p>
+                <div class="pathway-summary-row">
+                  ${c.applicantEmail ? `<span class="pathway-summary-item">${escapeHtml(c.applicantEmail)}</span>` : ''}
+                  ${c.experience ? `<span class="pathway-summary-item">Experience: ${escapeHtml(c.experience)}</span>` : ''}
+                  <span class="pathway-summary-item">Match band: ${score >= 75 ? 'Strong' : score >= 55 ? 'Possible' : 'Needs review'}</span>
+                </div>
+                <div class="hero-actions" style="margin-top:12px;">
+                  ${shortlisted ? `<button class="secondary" onclick="removeShortlistedCandidate('${escapeHtml(c.id)}')">Remove from shortlist</button>` : `<button class="primary" onclick="shortlistCandidate('${escapeHtml(c.id)}')">Shortlist candidate</button>`}
+                  ${c.applicantEmail ? `<a class="secondary" href="mailto:${escapeHtml(c.applicantEmail)}?subject=Jobs4Youth application follow-up">Contact candidate</a>` : ''}
+                </div>
+              </div>
+              <div class="fit ${scoreClass}" style="--score:${score}"><span>${score}%</span></div>
+            </div>
+          `;
+        }).join('') : `<div class="empty-card"><h4>No applications received yet</h4><p class="label">Once candidates apply to your opportunities, they will appear here with profile details, match scores and shortlist actions.</p><button class="secondary" onclick="setView('post opportunity')">Post opportunity</button></div>`}
+      </div>
+    </div>
   `;
 }
 
@@ -2331,6 +3025,10 @@ function render() {
   else if (state.view === 'privacy') c = privacy();
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
+  else if (state.view === 'impact') c = impactEvidence();
+  else if (state.view === 'champions') c = campusChampions();
+  else if (state.view === 'universities') c = universitiesPage();
+  else if (state.view === 'launch toolkit') c = launchToolkit();
   else if (state.view === 'notifications') c = notificationsCenter();
   else if (state.role === 'youth') c = state.view === 'dashboard' ? youthDash() : state.view === 'opportunities' ? opportunities() : state.view === 'training' ? training() : state.view === 'shortlist' ? shortlistPage() : state.view === 'opportunity detail' ? opportunityDetailPage() : state.view === 'application wizard' ? applicationWizardPage() : profile();
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
@@ -2565,13 +3263,19 @@ window.saveProfile = async function () {
     education: document.getElementById('profileEducation')?.value || '',
     availability: document.getElementById('profileAvailability')?.value || '',
     experience_level: document.getElementById('profileExperience')?.value || '',
+    gender: document.getElementById('profileGender')?.value || '',
     skills: document.getElementById('profileSkills')?.value || '',
     interests: document.getElementById('profileInterests')?.value || '',
     updated_at: new Date().toISOString()
   };
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-  if (error) return alert(`❌ Failed to save profile: ${error.message}`);
-  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, skills: updates.skills, interests: updates.interests };
+  if (error) {
+    console.warn('Profile save with gender failed, retrying without optional gender field:', error);
+    const { gender, ...fallbackUpdates } = updates;
+    const retry = await supabase.from('profiles').update(fallbackUpdates).eq('id', user.id);
+    if (retry.error) return alert(`❌ Failed to save profile: ${retry.error.message}`);
+  }
+  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, gender: updates.gender, skills: updates.skills, interests: updates.interests };
   alert('✅ Profile saved successfully!');
   render();
 };
