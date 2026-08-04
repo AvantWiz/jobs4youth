@@ -1953,6 +1953,105 @@ function profile() {
 
 
 
+
+function getStoredSafetyReports() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_safety_reports') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveStoredSafetyReports(reports) {
+  try {
+    localStorage.setItem('jobs4youth_safety_reports', JSON.stringify(reports || []));
+  } catch (error) {
+    console.warn('Could not save safety report locally:', error);
+  }
+}
+function safetyTrustTips() {
+  return `
+    <div class="trust-grid safety-trust-grid">
+      <div class="trust-card"><h4>Never pay to apply</h4><p class="label">Be cautious if anyone asks for application fees, interview fees, training deposits or money to secure a job.</p></div>
+      <div class="trust-card"><h4>Check the organisation</h4><p class="label">Use verified badges, organisation details and official contacts before sharing sensitive information.</p></div>
+      <div class="trust-card"><h4>Protect personal documents</h4><p class="label">Only upload or share documents through trusted workflows. Avoid sending ID documents to unknown contacts outside the platform.</p></div>
+      <div class="trust-card"><h4>Report suspicious listings</h4><p class="label">If something feels misleading, unsafe or too good to be true, report it so the platform team can review it.</p></div>
+    </div>
+  `;
+}
+function safetyCenterCard(compact = false) {
+  return `
+    <div class="card ${compact ? '' : 'span-12'} safety-center-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Trust and safety centre</div>
+          <h3>Apply confidently. Stay alert. Report anything suspicious.</h3>
+          <p class="label">Jobs4Youth promotes verified opportunities, structured employer workflows and practical safety guidance so young people can search and apply with more confidence.</p>
+        </div>
+        <span class="pill pill-verified">Youth protection first</span>
+      </div>
+      ${safetyTrustTips()}
+      <div class="notice trust-notice" style="margin-top:14px;"><b>Safety rule:</b> Jobs4Youth opportunities should never require young people to pay money to apply, be shortlisted or be interviewed.</div>
+    </div>
+  `;
+}
+window.reportOpportunity = async function(opportunityId) {
+  const job = getJobById(opportunityId);
+  if (!job) return showUserMessage('Opportunity not found. Please refresh and try again.');
+  const reason = prompt('Why are you reporting this opportunity? Example: asks for money, misleading information, suspicious contact, unsafe request, duplicate listing.');
+  if (!reason || !String(reason).trim()) return;
+  const report = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    opportunityId: job.id,
+    title: job.title,
+    organization: job.org,
+    country: job.country,
+    region: job.region,
+    reason: String(reason).trim(),
+    reporterId: currentUser?.id || null,
+    reporterEmail: currentUser?.email || null,
+    createdAt: new Date().toISOString(),
+    status: 'Submitted'
+  };
+  let savedToDatabase = false;
+  if (isConfigured && supabase && currentUser) {
+    try {
+      const { error } = await supabase.from('safety_reports').insert([{
+        opportunity_id: job.id,
+        reporter_id: currentUser.id,
+        report_reason: report.reason,
+        report_status: 'Submitted',
+        report_payload: report
+      }]);
+      if (!error) savedToDatabase = true;
+      if (error) console.warn('Safety report database insert warning:', error);
+    } catch (error) {
+      console.warn('Safety report fallback warning:', error);
+    }
+  }
+  const reports = getStoredSafetyReports();
+  reports.unshift(report);
+  saveStoredSafetyReports(reports.slice(0, 50));
+  showUserMessage(savedToDatabase ? 'Thank you. Your safety report has been submitted for review.' : 'Thank you. Your safety report has been saved locally. If this is urgent, contact the Jobs4Youth team through the Contact page.');
+};
+function safetyReportAdminSummary() {
+  const reports = getStoredSafetyReports();
+  return `
+    <div class="card span-12">
+      <div class="section-title"><h3>Safety reports</h3><span class="pill">${reports.length} local report${reports.length === 1 ? '' : 's'}</span></div>
+      <p class="label">This panel shows reports saved in this browser. If the Supabase safety_reports table exists, signed-in users also submit reports to the database.</p>
+      ${reports.length ? reports.slice(0, 8).map(item => `
+        <div class="notification-card notification-card-unread">
+          <div class="section-title">
+            <div><h4>${escapeHtml(item.title || 'Reported opportunity')}</h4><p class="label">${escapeHtml(item.organization || 'Unknown organisation')} • ${escapeHtml(item.region || '')}, ${escapeHtml(item.country || '')}</p></div>
+            <span class="pill">${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>
+          </div>
+          <div class="support-admin-note"><b>Report reason:</b> ${escapeHtml(item.reason || '')}</div>
+        </div>
+      `).join('') : `<div class="empty-card"><h4>No local safety reports yet</h4><p class="label">Reports submitted from this browser will appear here for quick review.</p></div>`}
+    </div>
+  `;
+}
+
 function getReferralState() {
   try {
     return JSON.parse(localStorage.getItem('jobs4youth_referral_state') || '{}');
