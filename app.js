@@ -13,7 +13,7 @@ const OPTION_SETS = {
   deliveryModes: ['Online','Hybrid','In-person'],
   courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp'],
   verificationDocumentTypes: ['Business Registration Certificate','Tax Compliance Certificate','Accreditation or Licence','Organisation Profile','Authorisation Letter','Other Supporting Document'],
-  genderOptions: ['Prefer not to say','Woman','Man','Non-binary','Other']
+  genderOptions: ['Female','Male']
 };
 
 const demoState = {
@@ -28,7 +28,7 @@ const demoState = {
     interests: 'agri-processing, dairy, quality control',
     availability: 'Immediate',
     experience: 'Entry Level',
-    gender: 'Woman',
+    gender: 'Female',
     organizationName: '',
     sector: '',
     verified: false
@@ -51,6 +51,14 @@ const demoState = {
     employerBottlenecks: [],
     underservedSegments: [],
     countrySignals: []
+  },
+  impactDemographics: {
+    youthReached: 0,
+    youngWomenReached: 0,
+    youngMenReached: 0,
+    unknownGender: 0,
+    womenParticipationRate: 0,
+    source: 'local'
   }
 };
 
@@ -296,6 +304,7 @@ function youthProfileCompletion() {
     state.profile.education,
     state.profile.availability,
     state.profile.experience,
+    state.profile.gender,
     state.profile.skills,
     state.profile.interests
   ]);
@@ -320,8 +329,8 @@ function onboardingMessage() {
   if (state.role === 'youth') {
     const completion = youthProfileCompletion();
     if (completion < 75) return {
-      title: 'Complete your youth profile to improve matching',
-      text: `Your current profile is ${completion}% complete. Add skills, interests, education and location details to improve relevance and trust.`,
+      title: 'Complete your youth profile, including gender, to improve matching',
+      text: `Your current profile is ${completion}% complete. Add gender, skills, interests, education and location details to improve relevance and trust.`,
       action: `<button class="secondary" onclick="setView('profile')">Complete profile</button>`
     };
     if (!state.applications.length) return {
@@ -629,6 +638,94 @@ function setRole(r) {
 window.setView = setView;
 window.setRole = setRole;
 
+
+function normalizeGender(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['female', 'woman', 'young woman', 'women'].includes(raw)) return 'Female';
+  if (['male', 'man', 'young man', 'men'].includes(raw)) return 'Male';
+  return '';
+}
+function isFemaleGender(value) {
+  return normalizeGender(value) === 'Female';
+}
+function isMaleGender(value) {
+  return normalizeGender(value) === 'Male';
+}
+function youthGenderMissing() {
+  return state.role === 'youth' && !normalizeGender(state.profile?.gender);
+}
+function genderRequiredNotice() {
+  return `
+    <div class="card span-12 gender-required-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Mandatory impact reporting field</div>
+          <h3>Complete gender before continuing</h3>
+          <p class="label">Jobs4Youth reports Young Women Reached and Women Participation Rate for funders and partners. Please select Female or Male to continue using youth features.</p>
+        </div>
+        <span class="pill pill-verified">Required</span>
+      </div>
+      <button class="primary" onclick="setView('profile')">Complete gender now</button>
+    </div>
+  `;
+}
+async function loadImpactDemographicsFromSupabase() {
+  state.impactDemographics = state.impactDemographics || { youthReached: 0, youngWomenReached: 0, youngMenReached: 0, unknownGender: 0, womenParticipationRate: 0, source: 'local' };
+  if (!isConfigured || !supabase) {
+    const gender = normalizeGender(state.profile?.gender);
+    const isYouth = state.role === 'youth';
+    const youthReached = isYouth ? 1 : 0;
+    const youngWomenReached = isYouth && gender === 'Female' ? 1 : 0;
+    const youngMenReached = isYouth && gender === 'Male' ? 1 : 0;
+    state.impactDemographics = { youthReached, youngWomenReached, youngMenReached, unknownGender: isYouth && !gender ? 1 : 0, womenParticipationRate: youthReached ? Math.round((youngWomenReached / youthReached) * 100) : 0, source: 'local' };
+    return;
+  }
+  try {
+    const { data, error } = await supabase.from('profiles').select('id, role, gender').eq('role', 'youth');
+    if (error) throw error;
+    const profiles = data || [];
+    const youthReached = profiles.length;
+    const youngWomenReached = profiles.filter(p => isFemaleGender(p.gender)).length;
+    const youngMenReached = profiles.filter(p => isMaleGender(p.gender)).length;
+    const unknownGender = profiles.filter(p => !normalizeGender(p.gender)).length;
+    const womenParticipationRate = youthReached ? Math.round((youngWomenReached / youthReached) * 100) : 0;
+    state.impactDemographics = { youthReached, youngWomenReached, youngMenReached, unknownGender, womenParticipationRate, source: 'profiles' };
+  } catch (error) {
+    console.warn('Impact demographics load warning:', error);
+    const visibleYouthReached = Number((state.signalLayer?.countrySignals || []).reduce((sum, item) => sum + Number(item.youthProfiles || 0), 0)) || (state.role === 'youth' ? 1 : 0);
+    const gender = normalizeGender(state.profile?.gender);
+    const currentYoungWomen = state.role === 'youth' && gender === 'Female' ? 1 : 0;
+    const currentYoungMen = state.role === 'youth' && gender === 'Male' ? 1 : 0;
+    state.impactDemographics = {
+      youthReached: visibleYouthReached,
+      youngWomenReached: currentYoungWomen,
+      youngMenReached: currentYoungMen,
+      unknownGender: Math.max(visibleYouthReached - currentYoungWomen - currentYoungMen, 0),
+      womenParticipationRate: visibleYouthReached ? Math.round((currentYoungWomen / visibleYouthReached) * 100) : 0,
+      source: 'fallback'
+    };
+  }
+}
+function ensureSignupGenderField() {
+  const roleWrap = document.getElementById('roleWrap');
+  if (!roleWrap || document.getElementById('signupGenderWrap')) return;
+  const wrap = document.createElement('label');
+  wrap.id = 'signupGenderWrap';
+  wrap.style.display = 'none';
+  wrap.innerHTML = `Gender <span style="color:#b42318">*</span><select id="signupGender"><option value="">Select gender</option><option value="Female">Female</option><option value="Male">Male</option></select>`;
+  roleWrap.insertAdjacentElement('afterend', wrap);
+  const roleEl = document.getElementById('authRole');
+  if (roleEl) roleEl.addEventListener('change', updateSignupGenderVisibility);
+}
+function updateSignupGenderVisibility() {
+  const wrap = document.getElementById('signupGenderWrap');
+  const roleEl = document.getElementById('authRole');
+  if (!wrap) return;
+  const isSignup = authMode === 'signup';
+  const role = roleEl?.value || 'youth';
+  wrap.style.display = isSignup && role === 'youth' ? 'block' : 'none';
+}
+
 function syncProfileToState(profile) {
   if (!profile) return;
   state.role = profile.role || 'youth';
@@ -641,7 +738,7 @@ function syncProfileToState(profile) {
     interests: profile.interests || '',
     availability: profile.availability || '',
     experience: profile.experience_level || '',
-    gender: profile.gender || '',
+    gender: normalizeGender(profile.gender) || '',
     organizationName: profile.organization_name || '',
     sector: profile.sector || '',
     verified: !!profile.verified
@@ -660,12 +757,21 @@ async function ensureProfile(user) {
   const incomingRole = (user.user_metadata?.role || 'youth').toLowerCase();
   const safeRole = ['youth', 'employer', 'institution', 'admin'].includes(incomingRole) ? incomingRole : 'youth';
   const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User';
+  const metadataGender = normalizeGender(user.user_metadata?.gender || '');
+  const profilePayload = { id: user.id, email: user.email, full_name: fullName, role: safeRole };
+  if (safeRole === 'youth' && metadataGender) profilePayload.gender = metadataGender;
 
-  const { data: createdProfile, error: insertError } = await supabase
+  let { data: createdProfile, error: insertError } = await supabase
     .from('profiles')
-    .insert([{ id: user.id, email: user.email, full_name: fullName, role: safeRole }])
+    .insert([profilePayload])
     .select().single();
 
+  if (insertError && String(insertError.message || '').toLowerCase().includes('gender')) {
+    const { gender, ...fallbackPayload } = profilePayload;
+    const retry = await supabase.from('profiles').insert([fallbackPayload]).select().single();
+    createdProfile = retry.data;
+    insertError = retry.error;
+  }
   if (insertError) {
     console.error('Error creating profile:', insertError);
     return null;
@@ -1034,6 +1140,13 @@ async function requireYouthUser() {
   const profile = await ensureProfile(user);
   if (!profile || profile.role !== 'youth') {
     showUserMessage('Only youth accounts can use this youth application workflow.');
+    return null;
+  }
+  if (!normalizeGender(profile.gender)) {
+    syncProfileToState(profile);
+    state.view = 'profile';
+    render();
+    showUserMessage('Please complete the mandatory Gender field before using youth features. This supports Young Women Reached reporting.');
     return null;
   }
   return { user, profile };
@@ -1865,7 +1978,7 @@ function youthProfileForm() {
       <label>Region / City<input id="profileRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
       ${actionSelect('Education','profileEducation', OPTION_SETS.educationLevels, state.profile.education, 'Choose education')}
       ${actionSelect('Availability','profileAvailability', OPTION_SETS.availability, state.profile.availability, 'Choose availability')}
-      ${actionSelect('Young women inclusion indicator','profileGender', OPTION_SETS.genderOptions, state.profile.gender, 'Choose optional indicator')}
+      ${actionSelect('Gender *','profileGender', OPTION_SETS.genderOptions, normalizeGender(state.profile.gender), 'Choose gender')}
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
       <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
@@ -1945,9 +2058,10 @@ function profile() {
   const heading = state.role === 'youth' ? 'Youth profile' : state.role === 'employer' ? 'Employer profile' : 'Institution profile';
   const completion = state.role === 'youth' ? youthProfileCompletion() : organisationProfileCompletion();
   const guidance = state.role === 'youth'
-    ? completionCard('Youth profile readiness', completion, 'Complete your core profile fields to improve matching and application readiness.', 'Complete youth profile')
+    ? completionCard('Youth profile readiness', completion, 'Complete your core profile fields including mandatory gender to improve matching and application readiness.', 'Complete youth profile')
     : completionCard('Organisation profile readiness', completion, 'Complete your organisation details to strengthen public trust and moderation readiness.', 'Complete organisation profile');
-  return `<div class="grid"><div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}</div></div>`;
+  const genderNotice = state.role === 'youth' && youthGenderMissing() ? genderRequiredNotice() : '';
+  return `<div class="grid">${genderNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}</div></div>`;
 }
 
 
@@ -2283,14 +2397,20 @@ function launchToolkit() {
 }
 
 function isYoungWomanProfile(profile = state.profile, role = state.role) {
-  return role === 'youth' && String(profile?.gender || '').toLowerCase().includes('woman');
+  return role === 'youth' && isFemaleGender(profile?.gender);
 }
 function getImpactMetrics() {
   const verifiedOpportunities = (state.jobs || []).filter(job => job.status === 'Verified').length;
   const verifiedTraining = (state.courses || []).filter(course => course.status === 'Verified').length;
   const applicationsSubmitted = (state.applications || []).length + (state.employerCandidates || []).length;
-  const visibleYouthReached = Number((state.signalLayer?.countrySignals || []).reduce((sum, item) => sum + Number(item.youthProfiles || 0), 0)) || (state.role === 'youth' ? 1 : 0);
-  const youngWomenReached = isYoungWomanProfile() ? 1 : 0;
+  const demographics = state.impactDemographics || {};
+  const signalYouthReached = Number((state.signalLayer?.countrySignals || []).reduce((sum, item) => sum + Number(item.youthProfiles || 0), 0)) || (state.role === 'youth' ? 1 : 0);
+  const visibleYouthReached = Number(demographics.youthReached || 0) || signalYouthReached;
+  const gender = normalizeGender(state.profile?.gender);
+  const youngWomenReached = Number(demographics.youngWomenReached || 0) || (state.role === 'youth' && gender === 'Female' ? 1 : 0);
+  const youngMenReached = Number(demographics.youngMenReached || 0) || (state.role === 'youth' && gender === 'Male' ? 1 : 0);
+  const unknownGender = Number(demographics.unknownGender || 0);
+  const womenParticipationRate = visibleYouthReached ? Math.round((youngWomenReached / visibleYouthReached) * 100) : 0;
   const skillGapCount = Number((state.signalLayer?.skillGap || []).reduce((sum, item) => sum + Number(item.gapCount || 0), 0)) || 0;
   const trainingGapCount = Number((state.signalLayer?.trainingGap || []).reduce((sum, item) => sum + Number(item.trainingGapCount || 0), 0)) || 0;
   const savedLearning = (state.savedCourses || []).length;
@@ -2298,6 +2418,9 @@ function getImpactMetrics() {
   return {
     visibleYouthReached,
     youngWomenReached,
+    youngMenReached,
+    unknownGender,
+    womenParticipationRate,
     applicationsSubmitted,
     verifiedOpportunities,
     verifiedTraining,
@@ -2362,7 +2485,7 @@ function impactEvidence() {
           <div>
             <div class="kicker">Funder-ready impact evidence</div>
             <h3>Jobs4Youth impact dashboard</h3>
-            <p class="label">A live evidence layer for tracking youth reach, young women inclusion, applications, verified opportunities, training pathways, skills gaps and country-level labour-market intelligence.</p>
+            <p class="label">A live evidence layer for tracking youth reach, Young Women Reached, Women Participation Rate, applications, verified opportunities, training pathways, skills gaps and country-level labour-market intelligence.</p>
           </div>
           <div class="hero-actions"><button class="primary" onclick="openSignup()">Join the platform</button><button class="secondary" onclick="setView('contact')">Discuss partnership</button></div>
         </div>
@@ -2370,7 +2493,9 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young women reached', m.youngWomenReached, 'Gender-responsive indicator based on visible youth profile gender information. Expand after adding aggregate gender reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
+      ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
       ${impactMetricCard('Verified opportunities', m.verifiedOpportunities, 'Moderated roles publicly visible to youth.', 'Trust')}
       ${impactMetricCard('Training pathways', m.verifiedTraining, 'Verified learning offers that can close skills gaps.', 'Skills')}
@@ -3119,6 +3244,9 @@ function bar(label, n) {
 function render() {
   renderShell();
   let c = '';
+  if (currentUser && state.role === 'youth' && youthGenderMissing() && !['profile','about','privacy','terms','contact','notifications'].includes(state.view)) {
+    state.view = 'profile';
+  }
   if (state.view === 'home') c = home();
   else if (state.view === 'about') c = about();
   else if (state.view === 'privacy') c = privacy();
@@ -3157,7 +3285,7 @@ window.closeAuthSuccessModal = function() {
 function closeAuthModal() {
   document.getElementById('authModal')?.classList.add('hidden');
   document.getElementById('authMessage').textContent = '';
-  const ids = ['authEmail','authPassword','authConfirmPassword','authFullName'];
+  const ids = ['authEmail','authPassword','authConfirmPassword','authFullName','signupGender'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -3165,6 +3293,7 @@ function closeAuthModal() {
 }
 
 function updateAuthModal() {
+  ensureSignupGenderField();
   const isSignup = authMode === 'signup';
   document.getElementById('authTitle').textContent = isSignup ? 'Create your Jobs4Youth account' : 'Sign in to Jobs4Youth';
   document.getElementById('authSubmitBtn').textContent = isSignup ? 'Create account' : 'Sign In';
@@ -3174,7 +3303,8 @@ function updateAuthModal() {
   if (confirmWrap) confirmWrap.style.display = isSignup ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', !isSignup);
   document.getElementById('tabSignup').classList.toggle('active', isSignup);
-  document.getElementById('authMessage').textContent = isSignup ? 'You will need to confirm your email before the first sign in.' : '';
+  updateSignupGenderVisibility();
+  document.getElementById('authMessage').textContent = isSignup ? 'Youth users must select gender so Jobs4Youth can report Young Women Reached accurately.' : '';
 }
 
 function demoSignIn() { openAuthModal('login'); }
@@ -3289,14 +3419,16 @@ async function handleAuthSubmit() {
   const confirmPassword = document.getElementById('authConfirmPassword')?.value.trim() || '';
   const fullName = document.getElementById('authFullName').value.trim();
   const role = document.getElementById('authRole').value;
+  const signupGender = normalizeGender(document.getElementById('signupGender')?.value || '');
   const msg = document.getElementById('authMessage');
   msg.textContent = '';
   if (!email || !password) { msg.textContent = 'Please enter email and password.'; return; }
+  if (authMode === 'signup' && role === 'youth' && !signupGender) { msg.textContent = 'Please select Gender. This field is mandatory for youth impact reporting.'; return; }
   if (authMode === 'signup' && password !== confirmPassword) { msg.textContent = 'Passwords do not match.'; return; }
   let authResult;
   try {
     authResult = authMode === 'signup'
-      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role } } })
+      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role, gender: role === 'youth' ? signupGender : '' } } })
       : await supabase.auth.signInWithPassword({ email, password });
   } catch (networkError) {
     console.error('Signup/signin network error:', networkError);
@@ -3326,6 +3458,7 @@ async function handleAuthSubmit() {
   await loadApplicationsFromSupabase();
   await loadSavedItemsFromSupabase();
   await loadSignalLayerFromSupabase();
+  await loadImpactDemographicsFromSupabase();
   await loadVerificationQueueFromSupabase();
   await loadVerificationDocumentsFromSupabase();
   await loadNotificationsFromSupabase();
@@ -3355,6 +3488,8 @@ window.saveProfile = async function () {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const user = userData?.user;
   if (userError || !user) return alert('Please sign in first.');
+  const selectedGender = normalizeGender(document.getElementById('profileGender')?.value || '');
+  if (!selectedGender) return alert('Please select Gender. This is mandatory for Young Women Reached reporting.');
   const updates = {
     full_name: document.getElementById('profileName')?.value || '',
     country: document.getElementById('profileCountry')?.value || '',
@@ -3362,7 +3497,7 @@ window.saveProfile = async function () {
     education: document.getElementById('profileEducation')?.value || '',
     availability: document.getElementById('profileAvailability')?.value || '',
     experience_level: document.getElementById('profileExperience')?.value || '',
-    gender: document.getElementById('profileGender')?.value || '',
+    gender: selectedGender,
     skills: document.getElementById('profileSkills')?.value || '',
     interests: document.getElementById('profileInterests')?.value || '',
     updated_at: new Date().toISOString()
@@ -3375,6 +3510,7 @@ window.saveProfile = async function () {
     if (retry.error) return alert(`❌ Failed to save profile: ${retry.error.message}`);
   }
   state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, gender: updates.gender, skills: updates.skills, interests: updates.interests };
+  await loadImpactDemographicsFromSupabase();
   alert('✅ Profile saved successfully!');
   render();
 };
@@ -3418,7 +3554,8 @@ async function initializeApp() {
     await loadApplicationsFromSupabase();
     await loadSavedItemsFromSupabase();
     await loadSignalLayerFromSupabase();
-    await loadVerificationQueueFromSupabase();
+    await loadImpactDemographicsFromSupabase();
+  await loadVerificationQueueFromSupabase();
     await loadVerificationDocumentsFromSupabase();
     await loadNotificationsFromSupabase();
     supabase.auth.onAuthStateChange(async (event, session) => {
