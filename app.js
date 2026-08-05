@@ -49,8 +49,7 @@ const demoState = {
   engagementSummary: { totalPoints: 0, currentStreak: 0, todayCheckedIn: false, lastCheckinType: '', level: 'Starter' },
   announcements: [],
   youthPolls: [],
-  chatMessages: [],
-  activeChatRoom: 'general-youth-lounge',
+  questLeaderboard: [],
   verificationItems: [],
   verificationDocuments: [],
   notifications: [],
@@ -605,11 +604,11 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 
 function navItems() {
-  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'chats', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['community', 'chats', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['community', 'chats', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['community', 'chats', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['community', 'chats', 'dashboard', 'verification', 'insights', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'quest', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['community', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['community', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['community', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['community', 'dashboard', 'verification', 'insights', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
 
@@ -622,9 +621,9 @@ function desc() {
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
   if (state.view === 'community') return 'Share achievements, ask questions, support peers and build daily career momentum.';
-  if (state.view === 'chats') return 'Join safe public opportunity chat rooms for jobs, CV help, skills, official updates and peer support.';
-  if (state.view === 'polls') return 'Vote on youth priorities and help official partners and funders understand what young people need most.';
-  if (state.view === 'announcements') return 'Official Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
+  if (state.view === 'quest') return 'Complete daily missions, earn badges, build streaks and appear on the Jobs4Youth leaderboard.';
+  if (state.view === 'polls') return 'Vote on youth priorities and help NYCOM, funders and partners understand what young people need most.';
+  if (state.view === 'announcements') return 'Official NYCOM and Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
   if (state.view === 'champions') return 'Invite youth, track Champion progress and grow the Jobs4Youth movement.';
   if (state.view === 'universities') return 'Onboard universities, TVETs and career offices into Jobs4Youth.';
   if (state.view === 'launch toolkit') return 'Access partner pitch wording, concept note summary and social campaign copy.';
@@ -826,7 +825,7 @@ function genderRequiredNotice() {
         <div>
           <div class="kicker">Mandatory impact reporting field</div>
           <h3>Complete gender before continuing</h3>
-          <p class="label">Jobs4Youth reports Young Women Reached and Women Participation Rate for partners and funders. Please select Female or Male to continue using youth features.</p>
+          <p class="label">Jobs4Youth reports Young Women Reached and Women Participation Rate for funders and partners. Please select Female or Male to continue using youth features.</p>
         </div>
         <span class="pill pill-verified">Required</span>
       </div>
@@ -2022,10 +2021,10 @@ function youthDash() {
       </div>
 
       ${communityPromptCard()}
-      ${chatsQuickCard()}
       ${birthdayWishCard()}
       ${safetyCenterCard(false)}
       ${dailyCheckinCard()}
+      ${questQuickCard()}
       ${pollsQuickCard()}
 
       <div class="card span-8 next-action-card">
@@ -2524,334 +2523,6 @@ function socialSharingCentre(compact = false) {
 
 
 
-
-const CHAT_ROOMS = [
-  { id: 'general-youth-lounge', name: 'General Youth Lounge', description: 'Daily youth conversations, updates and peer support.' },
-  { id: 'jobs-and-internships', name: 'Jobs and Internships', description: 'Share and ask about verified jobs, internships and apprenticeships.' },
-  { id: 'cv-and-interview-help', name: 'CV and Interview Help', description: 'Ask for CV, cover letter and interview preparation support.' },
-  { id: 'training-and-skills', name: 'Training and Skills', description: 'Discuss courses, skills pathways and learning opportunities.' },
-  { id: 'agriculture-opportunities', name: 'Agriculture Opportunities', description: 'Agriculture, agribusiness, food systems and climate-smart jobs.' },
-  { id: 'digital-skills', name: 'Digital Skills', description: 'Data, AI, coding, digital marketing and online work.' },
-  { id: 'young-women-in-work', name: 'Young Women in Work', description: 'Focused space for young women employment, leadership and skills pathways.' },
-  { id: 'campus-champions', name: 'Campus Champions', description: 'Coordinate ambassadors, campus onboarding and referrals.' },
-  { id: 'malawi-youth-opportunities', name: 'Malawi Youth Opportunities', description: 'Opportunities, events and support for youth in Malawi.' },
-  { id: 'youth-help-desk', name: 'Youth Help Desk', description: 'Questions and updates linked to youth development support.' }
-];
-
-function getLocalChatReports() {
-  try {
-    return JSON.parse(localStorage.getItem('jobs4youth_chat_reports') || '[]');
-  } catch (error) {
-    return [];
-  }
-}
-function saveLocalChatReports(items) {
-  try {
-    localStorage.setItem('jobs4youth_chat_reports', JSON.stringify(items || []));
-  } catch (error) {
-    console.warn('Could not save local chat reports:', error);
-  }
-}
-function getChatRoomLastSeen() {
-  try {
-    return JSON.parse(localStorage.getItem(`jobs4youth_chat_last_seen_${currentUser?.id || 'guest'}`) || '{}');
-  } catch (error) {
-    return {};
-  }
-}
-function saveChatRoomLastSeen(data) {
-  try {
-    localStorage.setItem(`jobs4youth_chat_last_seen_${currentUser?.id || 'guest'}`, JSON.stringify(data || {}));
-  } catch (error) {
-    console.warn('Could not save chat room last seen:', error);
-  }
-}
-function markChatRoomSeen(roomId = state.activeChatRoom) {
-  if (!roomId) return;
-  const data = getChatRoomLastSeen();
-  data[roomId] = new Date().toISOString();
-  saveChatRoomLastSeen(data);
-}
-function unreadCountForRoom(roomId) {
-  const lastSeen = getChatRoomLastSeen()[roomId];
-  return (state.chatMessages || []).filter(message => {
-    const msgRoom = message.roomId || message.room_id;
-    const msgDate = message.createdAt || message.created_at;
-    return msgRoom === roomId && (!lastSeen || new Date(msgDate) > new Date(lastSeen));
-  }).length;
-}
-function chatRoomMessageCount(roomId) {
-  return (state.chatMessages || []).filter(message => (message.roomId || message.room_id) === roomId).length;
-}
-
-function activeChatRoom() {
-  const id = state.activeChatRoom || 'general-youth-lounge';
-  return CHAT_ROOMS.find(room => room.id === id) || CHAT_ROOMS[0];
-}
-function getLocalChatMessages() {
-  try {
-    return JSON.parse(localStorage.getItem('jobs4youth_chat_messages') || '[]');
-  } catch (error) {
-    return [];
-  }
-}
-function saveLocalChatMessages(items) {
-  try {
-    localStorage.setItem('jobs4youth_chat_messages', JSON.stringify(items || []));
-  } catch (error) {
-    console.warn('Could not save local chat messages:', error);
-  }
-}
-function getRoomMessages(roomId = state.activeChatRoom) {
-  return (state.chatMessages || []).filter(message => message.roomId === roomId || message.room_id === roomId)
-    .sort((a, b) => new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0));
-}
-async function loadChatMessagesFromSupabase() {
-  state.chatMessages = [];
-  if (!isConfigured || !supabase || !currentUser) {
-    state.chatMessages = getLocalChatMessages();
-    return;
-  }
-  try {
-    const { data: messages, error } = await supabase
-      .from('chat_messages')
-      .select('id,room_id,user_id,content,is_hidden,created_at,updated_at')
-      .eq('is_hidden', false)
-      .order('created_at', { ascending: true })
-      .limit(500);
-    if (error) throw error;
-    const userIds = [...new Set((messages || []).map(item => item.user_id).filter(Boolean))];
-    let profileMap = {};
-    if (userIds.length) {
-      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').in('id', userIds);
-      profileMap = Object.fromEntries((profiles || []).map(profile => [profile.id, profile]));
-    }
-    state.chatMessages = (messages || []).map(item => ({
-      id: item.id,
-      roomId: item.room_id,
-      userId: item.user_id,
-      authorName: profileMap[item.user_id]?.full_name || 'Jobs4Youth member',
-      authorRole: profileMap[item.user_id]?.role || 'member',
-      content: item.content || '',
-      isHidden: !!item.is_hidden,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
-  } catch (error) {
-    console.warn('Chat messages load warning, using local fallback:', error);
-    state.chatMessages = getLocalChatMessages();
-  }
-}
-function chatRoomList() {
-  return `
-    <div class="card span-4 chat-room-list-card">
-      <div class="section-title"><div><h3>Opportunity Chat Rooms</h3><p class="label">Choose a safe public room.</p></div><span class="pill">${CHAT_ROOMS.length} rooms</span></div>
-      <div class="chat-room-list" style="display:grid;gap:8px;">
-        ${CHAT_ROOMS.map(room => {
-          const unread = unreadCountForRoom(room.id);
-          const total = chatRoomMessageCount(room.id);
-          return `
-          <button class="secondary ${activeChatRoom().id === room.id ? 'active' : ''}" onclick="switchChatRoom('${escapeHtml(room.id)}')" style="text-align:left;justify-content:space-between;gap:8px;">
-            <span><b>${escapeHtml(room.name)}</b><br><span class="label">${escapeHtml(room.description)}</span></span>
-            <span class="job-badges"><span class="pill">${total}</span>${unread ? `<span class="pill pill-verified">${unread} new</span>` : ''}</span>
-          </button>`;
-        }).join('')}
-      </div>
-    </div>
-  `;
-}
-function chatMessageBubble(message) {
-  const isMine = currentUser && message.userId === currentUser.id;
-  return `
-    <div class="chat-message ${isMine ? 'chat-message-mine' : ''}" style="padding:12px;border:1px solid var(--border);border-radius:18px;margin-bottom:10px;background:${isMine ? '#eef8e8' : '#fff'};">
-      <div class="section-title" style="margin-bottom:4px;">
-        <div class="results-meta"><span class="pill ${message.authorRole === 'admin' ? 'pill-verified' : ''}">${escapeHtml(message.authorName || 'Jobs4Youth member')}</span><span class="pill">${escapeHtml(message.createdAt ? new Date(message.createdAt).toLocaleTimeString() : 'Just now')}</span></div>
-      </div>
-      <p style="margin:0;white-space:pre-wrap;">${escapeHtml(message.content || '')}</p>
-      <div class="hero-actions" style="margin-top:8px;">
-        <button class="secondary" onclick="reportChatMessage('${escapeHtml(message.id)}')">Report</button>
-        ${state.role === 'admin' ? `<button class="secondary" onclick="hideChatMessage('${escapeHtml(message.id)}')">Hide message</button>` : ''}
-      </div>
-    </div>
-  `;
-}
-function chatsPage() {
-  const room = activeChatRoom();
-  const messages = getRoomMessages(room.id);
-  return `
-    <div class="grid chats-page">
-      <div class="card span-12">
-        <div class="section-title">
-          <div>
-            <div class="kicker">Public moderated rooms</div>
-            <h3>Jobs4Youth Chats</h3>
-            <p class="label">Ask questions, share opportunities, celebrate progress and support other youth. Keep conversations respectful, career-focused and safe.</p>
-          </div>
-          <div class="hero-actions"><button class="secondary" onclick="refreshChatRoom()">Refresh room</button><button class="primary" onclick="setView('community')">Open Community Feed</button></div>
-        </div>
-        <div class="notice"><b>Safety note:</b> Do not share passwords, payment requests, private documents, or suspicious links. Use the Report button on any unsafe or suspicious message. Admins can hide messages.</div>
-      </div>
-      ${chatModerationSummaryCard()}
-      ${chatRoomList()}
-      <div class="card span-8 chat-panel-card">
-        <div class="section-title">
-          <div><h3>${escapeHtml(room.name)}</h3><p class="label">${escapeHtml(room.description)}</p></div>
-          <span class="pill pill-verified">${messages.length} message${messages.length === 1 ? '' : 's'}</span>
-        </div>
-        <div class="chat-messages" id="chatMessagesBox" style="max-height:520px;overflow:auto;padding-right:6px;margin-top:10px;">
-          ${messages.length ? messages.map(chatMessageBubble).join('') : `<div class="empty-card"><h4>No messages yet</h4><p class="label">Be the first to start a useful conversation in this room.</p></div>`}
-        </div>
-        ${currentUser ? `
-          <div class="form" style="margin-top:14px;">
-            <label class="full">Send a message<textarea id="chatMessageInput" maxlength="800" placeholder="Write a short, respectful, career-focused message."></textarea></label>
-            <button class="primary full" onclick="sendChatMessage()">Send message</button>
-            <div class="label full" id="chatMessageStatus"></div>
-          </div>
-        ` : `
-          <div class="empty-card"><h4>Sign in to chat</h4><p class="label">Create an account or sign in to post messages in chat rooms.</p><button class="primary" onclick="openSignup()">Create account</button></div>
-        `}
-      </div>
-    </div>
-  `;
-}
-
-window.reportChatMessage = async function(messageId) {
-  if (!currentUser) return showUserMessage('Please sign in to report a message.');
-  const message = (state.chatMessages || []).find(item => String(item.id) === String(messageId));
-  if (!message) return showUserMessage('Message not found.');
-  const reason = prompt('Why are you reporting this message? Example: scam, harassment, suspicious link, inappropriate content, personal information request.');
-  if (!reason || !String(reason).trim()) return;
-  const report = {
-    id: `local-chat-report-${Date.now()}`,
-    messageId: message.id,
-    roomId: message.roomId || message.room_id,
-    reporterId: currentUser.id,
-    reason: String(reason).trim(),
-    createdAt: new Date().toISOString(),
-    status: 'Submitted'
-  };
-  if (isConfigured && supabase && !String(messageId).startsWith('local-chat-')) {
-    try {
-      const { error } = await supabase.from('chat_message_reports').insert([{
-        message_id: message.id,
-        room_id: message.roomId || message.room_id,
-        reporter_id: currentUser.id,
-        reason: report.reason,
-        report_status: 'Submitted'
-      }]);
-      if (error) throw error;
-      showUserMessage('Thank you. Your chat report has been submitted for moderation review.');
-      return;
-    } catch (error) {
-      console.warn('Chat report database warning, using local fallback:', error);
-    }
-  }
-  const reports = getLocalChatReports();
-  reports.unshift(report);
-  saveLocalChatReports(reports.slice(0, 100));
-  showUserMessage('Thank you. Your chat report has been saved locally.');
-};
-window.hideChatMessage = async function(messageId) {
-  if (!currentUser || state.role !== 'admin') return showUserMessage('Only admins can hide chat messages.');
-  if (!confirm('Hide this chat message from public view?')) return;
-  if (isConfigured && supabase && !String(messageId).startsWith('local-chat-')) {
-    try {
-      const { error } = await supabase.from('chat_messages').update({ is_hidden: true }).eq('id', messageId);
-      if (error) throw error;
-      await loadChatMessagesFromSupabase();
-      render();
-      showUserMessage('Message hidden.');
-      return;
-    } catch (error) {
-      console.warn('Chat hide database warning:', error);
-      return showUserMessage(`Could not hide message: ${error.message || error}`);
-    }
-  }
-  const local = getLocalChatMessages().filter(item => String(item.id) !== String(messageId));
-  saveLocalChatMessages(local);
-  state.chatMessages = local;
-  render();
-};
-function chatModerationSummaryCard() {
-  if (state.role !== 'admin') return '';
-  const reports = getLocalChatReports();
-  return `
-    <div class="card span-12">
-      <div class="section-title"><div><h3>Chat moderation summary</h3><p class="label">Local reports from this browser are shown here. Supabase reports can be reviewed directly in the chat_message_reports table for now.</p></div><span class="pill">${reports.length} local report${reports.length === 1 ? '' : 's'}</span></div>
-      ${reports.length ? reports.slice(0, 5).map(report => `<div class="support-admin-note" style="margin-top:8px;"><b>${escapeHtml(report.roomId || 'room')}:</b> ${escapeHtml(report.reason || '')}</div>`).join('') : `<p class="label">No local chat reports yet.</p>`}
-    </div>
-  `;
-}
-
-window.switchChatRoom = async function(roomId) {
-  const room = CHAT_ROOMS.find(item => item.id === roomId);
-  if (!room) return showUserMessage('Chat room not found.');
-  state.activeChatRoom = roomId;
-  await loadChatMessagesFromSupabase();
-  render();
-  setTimeout(() => {
-    const box = document.getElementById('chatMessagesBox');
-    if (box) box.scrollTop = box.scrollHeight;
-  }, 80);
-};
-window.refreshChatRoom = async function() {
-  await loadChatMessagesFromSupabase();
-  render();
-  setTimeout(() => {
-    const box = document.getElementById('chatMessagesBox');
-    if (box) box.scrollTop = box.scrollHeight;
-  }, 80);
-};
-window.sendChatMessage = async function() {
-  if (!currentUser) return showUserMessage('Please sign in to send messages.');
-  const room = activeChatRoom();
-  const input = document.getElementById('chatMessageInput');
-  const status = document.getElementById('chatMessageStatus');
-  const content = input?.value.trim() || '';
-  if (status) status.textContent = '';
-  if (!content) {
-    if (status) status.textContent = 'Please write a message first.';
-    return;
-  }
-  if (content.length > 800) {
-    if (status) status.textContent = 'Please keep messages under 800 characters.';
-    return;
-  }
-  if (isConfigured && supabase) {
-    try {
-      const { error } = await supabase.from('chat_messages').insert([{ room_id: room.id, user_id: currentUser.id, content, is_hidden: false }]);
-      if (error) throw error;
-      if (input) input.value = '';
-      await loadChatMessagesFromSupabase();
-      render();
-      setTimeout(() => {
-        const box = document.getElementById('chatMessagesBox');
-        if (box) box.scrollTop = box.scrollHeight;
-      }, 80);
-      return;
-    } catch (error) {
-      console.warn('Chat message database warning, using local fallback:', error);
-    }
-  }
-  const local = getLocalChatMessages();
-  local.push({ id: `local-chat-${Date.now()}`, roomId: room.id, userId: currentUser.id, authorName: state.profile?.name || 'Jobs4Youth member', authorRole: state.role, content, isHidden: false, createdAt: new Date().toISOString() });
-  saveLocalChatMessages(local.slice(-500));
-  state.chatMessages = local.slice(-500);
-  if (input) input.value = '';
-  if (status) status.textContent = 'Message saved locally. Create the Supabase chat table to sync across users.';
-  render();
-};
-function chatsQuickCard() {
-  return `
-    <div class="card span-12 chats-quick-card">
-      <div class="section-title">
-        <div><div class="kicker">Live peer support</div><h3>Join Jobs4Youth chat rooms</h3><p class="label">Use public rooms for jobs, internships, CV help, skills, agriculture opportunities, digital skills, young women in work and youth support.</p></div>
-        <button class="primary" onclick="setView('chats')">Open Chats</button>
-      </div>
-    </div>
-  `;
-}
-
 function getLocalYouthPolls() {
   try {
     return JSON.parse(localStorage.getItem('jobs4youth_polls') || '[]');
@@ -2990,7 +2661,7 @@ function youthPollCard(poll) {
       <div style="margin-top:14px;">
         ${(poll.options || []).map(option => pollResultBar(poll, option)).join('')}
       </div>
-      <div class="label" style="margin-top:10px;">${poll.myVote ? `Your vote: ${escapeHtml(poll.myVote)}` : 'Vote to help partners understand youth priorities.'}</div>
+      <div class="label" style="margin-top:10px;">${poll.myVote ? `Your vote: ${escapeHtml(poll.myVote)}` : 'Vote to help NYCOM and partners understand youth priorities.'}</div>
     </div>
   `;
 }
@@ -2998,7 +2669,7 @@ function youthPollComposer() {
   if (state.role !== 'admin') return '';
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">Admin youth intelligence</div><h3>Create a youth poll</h3><p class="label">Use polls to collect real-time youth feedback for partners, funders and programme design.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="section-title"><div><div class="kicker">Admin youth intelligence</div><h3>Create a youth poll</h3><p class="label">Use polls to collect real-time youth feedback for NYCOM, funders and programme design.</p></div><span class="pill pill-verified">Admin only</span></div>
       <div class="form" style="margin-top:14px;">
         <label>Category<select id="pollCategory"><option>Youth Needs</option><option>Platform Feedback</option><option>Training</option><option>Employment</option><option>Entrepreneurship</option><option>Gender Inclusion</option><option>General</option></select></label>
         <label class="full">Question<input id="pollQuestion" placeholder="e.g. What support do you need most this month?"/></label>
@@ -3021,7 +2692,7 @@ function pollInsightsCard() {
   topSignals.sort((a, b) => b.count - a.count);
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">Youth intelligence</div><h3>What youth are telling us</h3><p class="label">Polls convert daily platform activity into real-time youth feedback for programming, partnerships and funder reporting.</p></div><span class="pill">${allVotes} total vote${allVotes === 1 ? '' : 's'}</span></div>
+      <div class="section-title"><div><div class="kicker">NYCOM youth intelligence</div><h3>What youth are telling us</h3><p class="label">Polls convert daily platform activity into real-time youth feedback for programming, partnerships and funder reporting.</p></div><span class="pill">${allVotes} total vote${allVotes === 1 ? '' : 's'}</span></div>
       <div class="mini-grid ${topSignals.length > 3 ? '' : 'single-column'}">
         ${topSignals.slice(0, 6).length ? topSignals.slice(0, 6).map(signal => `
           <div class="mini-card"><h4>${escapeHtml(signal.option)}</h4><p class="label">${signal.count} vote${signal.count === 1 ? '' : 's'} • ${escapeHtml(signal.poll)}</p></div>
@@ -3041,7 +2712,7 @@ function pollsPage() {
         <div class="section-title">
           <div>
             <div class="kicker">Youth Voice Lab</div>
-            <h3>Tell Jobs4Youth what young people need most</h3>
+            <h3>Tell NYCOM and Jobs4Youth what young people need most</h3>
             <p class="label">Vote in simple polls and help shape opportunities, training, support services and funder priorities.</p>
           </div>
           <div class="hero-actions"><button class="secondary" onclick="refreshYouthPolls()">Refresh polls</button><button class="primary" onclick="setView('community')">Open community</button></div>
@@ -3050,7 +2721,7 @@ function pollsPage() {
       <div class="card span-3"><div class="label">Active polls</div><div class="metric">${activeCount}</div><div class="label">Questions open for youth feedback</div></div>
       <div class="card span-3"><div class="label">Total votes</div><div class="metric">${totalVotes}</div><div class="label">Youth responses captured</div></div>
       <div class="card span-3"><div class="label">My votes</div><div class="metric">${myVotes}</div><div class="label">Polls you have answered</div></div>
-      <div class="card span-3"><div class="label">Insight use</div><div class="metric">Live</div><div class="label">Feedback for programmes and partners</div></div>
+      <div class="card span-3"><div class="label">Insight use</div><div class="metric">NYCOM</div><div class="label">Feedback for programmes and partners</div></div>
       ${youthPollComposer()}
       ${pollInsightsCard()}
       ${polls.length ? polls.map(youthPollCard).join('') : `<div class="card span-12"><div class="empty-card"><h4>No youth polls yet</h4><p class="label">Admins can create polls to collect youth feedback.</p></div></div>`}
@@ -3132,6 +2803,146 @@ function isBirthdayToday(dateValue) {
   return Number(parts[1]) === today.getMonth() + 1 && Number(parts[2]) === today.getDate();
 }
 
+
+const CAREER_MISSIONS = [
+  { id: 'checkin', title: 'Daily Career Check-In', body: 'Record one career progress action today.', points: 10, actionLabel: 'Check in', action: "setView('dashboard')", isComplete: () => !!(state.engagementSummary?.todayCheckedIn) },
+  { id: 'community_post', title: 'Post in Community', body: 'Share an achievement, question, learning update or opportunity tip.', points: 15, actionLabel: 'Post update', action: "setView('community')", isComplete: () => (state.communityPosts || []).some(p => String(p.userId || p.user_id) === String(currentUser?.id)) },
+  { id: 'vote_poll', title: 'Vote in Youth Polls', body: 'Help NYCOM and partners understand what youth need most.', points: 10, actionLabel: 'Vote now', action: "setView('polls')", isComplete: () => (state.youthPolls || []).some(p => !!p.myVote) },
+  { id: 'save_pathway', title: 'Save One Pathway', body: 'Save one job, internship or training opportunity for later action.', points: 10, actionLabel: 'Find pathways', action: "setView('opportunities')", isComplete: () => ((state.savedOpportunities || []).length + (state.savedCourses || []).length) > 0 },
+  { id: 'apply', title: 'Apply to an Opportunity', body: 'Submit at least one guided application.', points: 25, actionLabel: 'Apply', action: "setView('opportunities')", isComplete: () => (state.applications || []).length > 0 },
+  { id: 'complete_profile', title: 'Complete Career Passport', body: 'Reach 90% or more profile completeness.', points: 30, actionLabel: 'Improve profile', action: "setView('profile')", isComplete: () => state.role === 'youth' && youthProfileCompletion() >= 90 }
+];
+function getQuestBadges() {
+  const summary = state.engagementSummary || {};
+  const postsByMe = (state.communityPosts || []).filter(p => String(p.userId || p.user_id) === String(currentUser?.id)).length;
+  const savedCount = (state.savedOpportunities || []).length + (state.savedCourses || []).length;
+  const applicationsCount = (state.applications || []).length;
+  const profileCompletion = state.role === 'youth' ? youthProfileCompletion() : 0;
+  const votes = (state.youthPolls || []).filter(p => !!p.myVote).length;
+  return [
+    { name: 'Profile Hero', icon: '🎯', unlocked: profileCompletion >= 90, detail: 'Career Passport 90%+ complete' },
+    { name: 'Daily Mover', icon: '🔥', unlocked: (summary.currentStreak || 0) >= 3, detail: '3-day career streak' },
+    { name: 'Community Voice', icon: '📣', unlocked: postsByMe >= 1, detail: 'Posted in Community' },
+    { name: 'Youth Voice', icon: '🗳️', unlocked: votes >= 1, detail: 'Voted in a youth poll' },
+    { name: 'Pathway Saver', icon: '⭐', unlocked: savedCount >= 1, detail: 'Saved a job or training pathway' },
+    { name: 'First Application', icon: '🚀', unlocked: applicationsCount >= 1, detail: 'Submitted an application' },
+    { name: 'Opportunity Champion', icon: '🏆', unlocked: (summary.totalPoints || 0) >= 250, detail: 'Earned 250+ quest points' },
+    { name: 'Career Leader', icon: '👑', unlocked: (summary.totalPoints || 0) >= 1000, detail: 'Earned 1000+ quest points' }
+  ];
+}
+function questCompletionStats() {
+  const missions = CAREER_MISSIONS.map(mission => ({ ...mission, complete: mission.isComplete() }));
+  const completed = missions.filter(m => m.complete).length;
+  const availablePoints = missions.reduce((sum, m) => sum + Number(m.points || 0), 0);
+  const earnedToday = missions.filter(m => m.complete).reduce((sum, m) => sum + Number(m.points || 0), 0);
+  return { missions, completed, total: missions.length, availablePoints, earnedToday };
+}
+async function loadCareerQuestLeaderboardFromSupabase() {
+  state.questLeaderboard = [];
+  if (!currentUser) return;
+  if (!isConfigured || !supabase) {
+    state.questLeaderboard = [{ userId: currentUser.id, fullName: state.profile?.name || 'You', country: state.profile?.country || '', totalPoints: state.engagementSummary?.totalPoints || 0, currentStreak: state.engagementSummary?.currentStreak || 0, rank: 1 }];
+    return;
+  }
+  try {
+    const { data, error } = await supabase.rpc('get_career_quest_leaderboard');
+    if (error) throw error;
+    state.questLeaderboard = (data || []).map((row, index) => ({
+      userId: row.user_id,
+      fullName: row.full_name || 'Jobs4Youth member',
+      country: row.country || '',
+      totalPoints: Number(row.total_points || 0),
+      currentStreak: Number(row.current_streak || 0),
+      rank: Number(row.rank || index + 1)
+    }));
+  } catch (error) {
+    console.warn('Career Quest leaderboard warning:', error);
+    state.questLeaderboard = [{ userId: currentUser.id, fullName: state.profile?.name || 'You', country: state.profile?.country || '', totalPoints: state.engagementSummary?.totalPoints || 0, currentStreak: state.engagementSummary?.currentStreak || 0, rank: 1 }];
+  }
+}
+function missionCard(mission) {
+  return `
+    <div class="mini-card ${mission.complete ? 'job-verified' : ''}">
+      <div class="section-title">
+        <div><h4>${mission.complete ? '✅ ' : ''}${escapeHtml(mission.title)}</h4><p class="label">${escapeHtml(mission.body)}</p></div>
+        <span class="pill ${mission.complete ? 'pill-verified' : ''}">+${mission.points} pts</span>
+      </div>
+      <button class="${mission.complete ? 'secondary' : 'primary'}" onclick="${mission.action}">${mission.complete ? 'Completed' : escapeHtml(mission.actionLabel)}</button>
+    </div>
+  `;
+}
+function badgeCard(badge) {
+  return `
+    <div class="mini-card ${badge.unlocked ? 'job-verified' : ''}">
+      <div style="font-size:30px;line-height:1;">${badge.icon}</div>
+      <h4>${escapeHtml(badge.name)}</h4>
+      <p class="label">${escapeHtml(badge.detail)}</p>
+      <span class="pill ${badge.unlocked ? 'pill-verified' : ''}">${badge.unlocked ? 'Unlocked' : 'Locked'}</span>
+    </div>
+  `;
+}
+function leaderboardCard() {
+  const rows = state.questLeaderboard || [];
+  return `
+    <div class="card span-12">
+      <div class="section-title"><div><div class="kicker">Career Quest leaderboard</div><h3>Top youth career movers</h3><p class="label">Leaderboard is based on daily check-ins and quest activity. It motivates consistency, not just job outcomes.</p></div><button class="secondary" onclick="refreshCareerQuest()">Refresh leaderboard</button></div>
+      ${rows.length ? rows.slice(0, 10).map(row => `
+        <div class="shortlist-item-card">
+          <div><h4>#${row.rank} ${escapeHtml(row.fullName)}</h4><p class="label">${escapeHtml(row.country || 'Country not set')} • ${row.currentStreak || 0}-day streak</p></div>
+          <span class="pill pill-verified">${row.totalPoints || 0} pts</span>
+        </div>
+      `).join('') : `<div class="empty-card"><h4>No leaderboard yet</h4><p class="label">Youth will appear here after completing daily missions.</p></div>`}
+    </div>
+  `;
+}
+function questQuickCard() {
+  if (!currentUser || state.role !== 'youth') return '';
+  const stats = questCompletionStats();
+  const summary = state.engagementSummary || {};
+  return `
+    <div class="card span-12 career-quest-quick-card">
+      <div class="section-title">
+        <div><div class="kicker">Career Quest</div><h3>${stats.completed}/${stats.total} daily missions completed</h3><p class="label">Earn badges, build streaks and climb the leaderboard by taking small career actions every day.</p></div>
+        <div class="job-badges"><span class="pill pill-verified">${summary.totalPoints || 0} pts</span><span class="pill">${summary.currentStreak || 0}-day streak</span></div>
+      </div>
+      <div class="chartbar"><div style="width:${Math.round((stats.completed / Math.max(stats.total, 1)) * 100)}%"></div></div>
+      <div class="hero-actions" style="margin-top:14px;"><button class="primary" onclick="setView('quest')">Open Career Quest</button><button class="secondary" onclick="setView('community')">Post progress</button></div>
+    </div>
+  `;
+}
+function careerQuestPage() {
+  if (!currentUser) return `<div class="grid"><div class="card span-12"><h3>Sign in to open Career Quest</h3><p class="label">Create an account to complete daily missions, earn badges and join the leaderboard.</p><button class="primary" onclick="openSignup()">Create account</button></div></div>`;
+  const stats = questCompletionStats();
+  const summary = state.engagementSummary || {};
+  const badges = getQuestBadges();
+  const unlocked = badges.filter(b => b.unlocked).length;
+  return `
+    <div class="grid career-quest-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div><div class="kicker">Career Quest</div><h3>Daily Missions + Badges + Leaderboard</h3><p class="label">Turn Jobs4Youth activity into a reward system that celebrates progress, consistency, peer support and employability growth.</p></div>
+          <div class="job-badges"><span class="pill pill-verified">${summary.totalPoints || 0} points</span><span class="pill">${summary.currentStreak || 0}-day streak</span><span class="pill">${unlocked}/${badges.length} badges</span></div>
+        </div>
+      </div>
+      <div class="card span-3"><div class="label">Quest level</div><div class="metric" style="font-size:26px;">${escapeHtml(summary.level || 'Starter')}</div><div class="label">Based on total points</div></div>
+      <div class="card span-3"><div class="label">Daily missions</div><div class="metric">${stats.completed}/${stats.total}</div><div class="label">Completed today</div></div>
+      <div class="card span-3"><div class="label">Badges</div><div class="metric">${unlocked}</div><div class="label">Unlocked achievements</div></div>
+      <div class="card span-3"><div class="label">Streak</div><div class="metric">${summary.currentStreak || 0}</div><div class="label">Consecutive days</div></div>
+      <div class="card span-12"><div class="section-title"><div><h3>Today's missions</h3><p class="label">Complete these actions to build real employability momentum.</p></div><span class="pill">${stats.earnedToday}/${stats.availablePoints} mission pts visible</span></div><div class="mini-grid">${stats.missions.map(missionCard).join('')}</div></div>
+      <div class="card span-12"><div class="section-title"><div><h3>Badges</h3><p class="label">Badges make progress visible and encourage youth to keep building their Career Passport.</p></div><span class="pill pill-trust">Recognition layer</span></div><div class="mini-grid">${badges.map(badgeCard).join('')}</div></div>
+      ${leaderboardCard()}
+    </div>
+  `;
+}
+window.refreshCareerQuest = async function() {
+  await loadEngagementFromSupabase();
+  await loadCommunityFromSupabase();
+  await loadYouthPollsFromSupabase();
+  await loadSavedItemsFromSupabase();
+  await loadCareerQuestLeaderboardFromSupabase();
+  render();
+};
+
 function pollsQuickCard() {
   const polls = state.youthPolls || [];
   const unanswered = polls.filter(poll => !poll.myVote).length;
@@ -3139,7 +2950,7 @@ function pollsQuickCard() {
   return `
     <div class="card span-12 polls-quick-card">
       <div class="section-title">
-        <div><div class="kicker">Youth voice</div><h3>${unanswered ? `${unanswered} poll${unanswered === 1 ? '' : 's'} need your voice` : 'Thank you for voting'}</h3><p class="label">Your feedback helps partners and funders design better youth employment and skills support.</p></div>
+        <div><div class="kicker">Youth voice</div><h3>${unanswered ? `${unanswered} poll${unanswered === 1 ? '' : 's'} need your voice` : 'Thank you for voting'}</h3><p class="label">Your feedback helps NYCOM, partners and funders design better youth employment and skills support.</p></div>
         <button class="primary" onclick="setView('polls')">Open Youth Polls</button>
       </div>
     </div>
@@ -3184,7 +2995,7 @@ async function loadAnnouncementsFromSupabase() {
   }
   try {
     const { data, error } = await supabase
-      .from('platform_announcements')
+      .from('nycom_announcements')
       .select('id,title,body,category,created_by,created_at,updated_at,is_active')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -3224,9 +3035,9 @@ function announcementComposer() {
   if (state.role !== 'admin') return '';
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">Admin broadcast</div><h3>Create Jobs4Youth announcement</h3><p class="label">Use this for official youth alerts, opportunities, campaigns and platform updates.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="section-title"><div><div class="kicker">Admin broadcast</div><h3>Create NYCOM / Jobs4Youth announcement</h3><p class="label">Use this for official youth alerts, opportunities, campaigns and platform updates.</p></div><span class="pill pill-verified">Admin only</span></div>
       <div class="form" style="margin-top:14px;">
-        <label>Category<select id="announcementCategory"><option value="General">Official Update</option><option>Opportunity Alert</option><option>Training Alert</option><option>Platform Update</option><option>Campaign</option><option>General</option></select></label>
+        <label>Category<select id="announcementCategory"><option>NYCOM Update</option><option>Opportunity Alert</option><option>Training Alert</option><option>Platform Update</option><option>Campaign</option><option>General</option></select></label>
         <label class="full">Title<input id="announcementTitle" placeholder="e.g. New opportunities for youth are now available"/></label>
         <label class="full">Message<textarea id="announcementBody" placeholder="Write a clear and short update for youth."></textarea></label>
         <button class="primary full" onclick="submitAnnouncement()">Publish announcement</button>
@@ -3243,7 +3054,7 @@ function announcementsPage() {
         <div class="section-title">
           <div>
             <div class="kicker">Official youth updates</div>
-            <h3>Jobs4Youth Announcements</h3>
+            <h3>NYCOM and Jobs4Youth Announcements</h3>
             <p class="label">A trusted channel for youth alerts, campaigns, training, events and opportunity updates.</p>
           </div>
           <div class="hero-actions"><button class="secondary" onclick="refreshAnnouncements()">Refresh</button><button class="primary" onclick="setView('community')">Open community</button></div>
@@ -3252,7 +3063,7 @@ function announcementsPage() {
       ${announcementComposer()}
       <div class="card span-12">
         <div class="section-title"><div><h3>Latest official updates</h3><p class="label">Announcements shown here are intended to be trusted and action-oriented for youth.</p></div><span class="pill">${items.length} update${items.length === 1 ? '' : 's'}</span></div>
-        ${items.length ? items.map(announcementCard).join('') : `<div class="empty-card"><h4>No announcements yet</h4><p class="label">Official Jobs4Youth announcements will appear here once published.</p></div>`}
+        ${items.length ? items.map(announcementCard).join('') : `<div class="empty-card"><h4>No announcements yet</h4><p class="label">Official NYCOM and Jobs4Youth announcements will appear here once published.</p></div>`}
       </div>
     </div>
   `;
@@ -3275,7 +3086,7 @@ window.submitAnnouncement = async function() {
   }
   if (isConfigured && supabase) {
     try {
-      const { error } = await supabase.from('platform_announcements').insert([{ title, body, category, created_by: currentUser.id, is_active: true }]);
+      const { error } = await supabase.from('nycom_announcements').insert([{ title, body, category, created_by: currentUser.id, is_active: true }]);
       if (error) throw error;
       await loadAnnouncementsFromSupabase();
       showUserMessage('Announcement published.');
@@ -3653,7 +3464,6 @@ function communityPage() {
 }
 window.refreshCommunityFeed = async function() {
   await loadCommunityFromSupabase();
-  await loadChatMessagesFromSupabase();
   await loadAnnouncementsFromSupabase();
   render();
 };
@@ -3845,7 +3655,7 @@ function launchToolkit() {
         </div>
       </div>
       <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
-      <div class="card span-6"><h3>Funder-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
       <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
     </div>
   `;
@@ -3948,7 +3758,7 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for funder-ready inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
       ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
       ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
@@ -4708,7 +4518,7 @@ function render() {
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
   else if (state.view === 'community') c = communityPage();
-  else if (state.view === 'chats') c = chatsPage();
+  else if (state.view === 'quest') c = careerQuestPage();
   else if (state.view === 'polls') c = pollsPage();
   else if (state.view === 'announcements') c = announcementsPage();
   else if (state.view === 'impact') c = impactEvidence();
@@ -4723,13 +4533,6 @@ function render() {
   document.getElementById('content').innerHTML = c;
   if (state.role === 'youth' && state.view === 'profile') {
     setTimeout(() => initialiseProfileDraftAutosave(), 0);
-  }
-  if (state.view === 'chats') {
-    markChatRoomSeen(state.activeChatRoom);
-    setTimeout(() => {
-      const box = document.getElementById('chatMessagesBox');
-      if (box) box.scrollTop = box.scrollHeight;
-    }, 80);
   }
 }
 
@@ -4927,6 +4730,7 @@ async function handleAuthSubmit() {
   await loadApplicationsFromSupabase();
   await loadSavedItemsFromSupabase();
   await loadEngagementFromSupabase();
+  await loadCareerQuestLeaderboardFromSupabase();
   await loadSignalLayerFromSupabase();
   await loadImpactDemographicsFromSupabase();
   await loadVerificationQueueFromSupabase();
@@ -5027,6 +4831,7 @@ async function initializeApp() {
     await loadApplicationsFromSupabase();
     await loadSavedItemsFromSupabase();
     await loadEngagementFromSupabase();
+    await loadCareerQuestLeaderboardFromSupabase();
     await loadSignalLayerFromSupabase();
     await loadImpactDemographicsFromSupabase();
     await loadVerificationQueueFromSupabase();
@@ -5053,6 +4858,7 @@ async function initializeApp() {
       await loadApplicationsFromSupabase();
       await loadSavedItemsFromSupabase();
       await loadEngagementFromSupabase();
+      await loadCareerQuestLeaderboardFromSupabase();
       await loadSignalLayerFromSupabase();
       await loadVerificationQueueFromSupabase();
       await loadVerificationDocumentsFromSupabase();
