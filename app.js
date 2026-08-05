@@ -604,10 +604,10 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 function navItems() {
   if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'community', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'community', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'community', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'insights', 'community', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['community', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['community', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['community', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['community', 'dashboard', 'verification', 'insights', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
 
@@ -793,6 +793,29 @@ function isMaleGender(value) {
 function youthGenderMissing() {
   return state.role === 'youth' && !normalizeGender(state.profile?.gender);
 }
+
+window.scrollToProfileGender = function() {
+  state.view = 'profile';
+  render();
+  setTimeout(() => {
+    const genderField = document.getElementById('profileGender');
+    const profileForm = genderField?.closest('.form') || document.getElementById('profileName')?.closest('.form');
+    const target = genderField || profileForm || document.getElementById('content');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (genderField) {
+        genderField.focus();
+        genderField.style.outline = '3px solid #f2c94c';
+        genderField.style.boxShadow = '0 0 0 4px rgba(242, 201, 76, 0.25)';
+        setTimeout(() => {
+          genderField.style.outline = '';
+          genderField.style.boxShadow = '';
+        }, 2500);
+      }
+    }
+  }, 120);
+};
+
 function genderRequiredNotice() {
   return `
     <div class="card span-12 gender-required-card">
@@ -804,7 +827,7 @@ function genderRequiredNotice() {
         </div>
         <span class="pill pill-verified">Required</span>
       </div>
-      <button class="primary" onclick="setView('profile')">Complete gender now</button>
+      <button class="primary" onclick="scrollToProfileGender()">Complete gender now</button>
     </div>
   `;
 }
@@ -976,7 +999,10 @@ async function loadCoursesFromSupabase() {
 async function loadApplicationsFromSupabase() {
   state.applications = [];
   state.employerCandidates = [];
-  if (!isConfigured || !currentUser) return;
+  if (!isConfigured || !currentUser) {
+    ensureCommunityPromptNotification();
+    return;
+  }
 
   if (state.role === 'youth') {
     const { data, error } = await supabase.from('applications').select('*').eq('applicant_id', currentUser.id);
@@ -1120,6 +1146,7 @@ async function loadNotificationsFromSupabase() {
     .order('created_at', { ascending: false });
   if (error) {
     console.error('Error loading notifications:', error);
+    ensureCommunityPromptNotification();
     return;
   }
   let emailStatusMap = {};
@@ -1148,6 +1175,47 @@ async function loadNotificationsFromSupabase() {
     createdAt: item.created_at || null,
     emailStatus: emailStatusMap[`${item.related_entity_type || 'platform'}:${item.related_entity_id || item.created_at}`] || ''
   }));
+  ensureCommunityPromptNotification();
+}
+
+
+function communityPromptNotification() {
+  return {
+    id: 'local-community-prompt',
+    userId: currentUser?.id || null,
+    actorId: null,
+    title: 'Community is open for daily youth updates',
+    body: 'Go to Community to post updates, achievements, questions and comments. Chat rooms are coming soon, but you can already like and comment on community posts.',
+    notificationType: 'community_prompt',
+    relatedEntityType: 'community',
+    relatedEntityId: 'community-feed',
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    emailStatus: ''
+  };
+}
+function ensureCommunityPromptNotification() {
+  if (!currentUser) return;
+  const exists = (state.notifications || []).some(item => item.id === 'local-community-prompt' || item.notificationType === 'community_prompt');
+  if (!exists) state.notifications = [communityPromptNotification(), ...(state.notifications || [])];
+}
+function communityPromptCard() {
+  return `
+    <div class="card span-12 community-prompt-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">New daily engagement space</div>
+          <h3>Go to Community to post updates, achievements, questions and comments</h3>
+          <p class="label">There are no chat rooms yet, but youth can already interact through posts, likes and comments. Use Community as the daily space for wins, questions, opportunity tips and peer support.</p>
+        </div>
+        <span class="pill pill-verified">Community feed live</span>
+      </div>
+      <div class="hero-actions">
+        <button class="primary" onclick="setView('community')">Open Community</button>
+        <button class="secondary" onclick="setView('polls')">Answer youth polls</button>
+      </div>
+    </div>
+  `;
 }
 
 window.markNotificationRead = async function(notificationId) {
@@ -1935,6 +2003,7 @@ function youthDash() {
         </div>
       </div>
 
+      ${communityPromptCard()}
       ${birthdayWishCard()}
       ${safetyCenterCard(false)}
       ${dailyCheckinCard()}
@@ -2206,7 +2275,7 @@ function profile() {
     : completionCard('Organisation profile readiness', completion, 'Complete your organisation details to strengthen public trust and moderation readiness.', 'Complete organisation profile');
   const genderNotice = state.role === 'youth' && youthGenderMissing() ? genderRequiredNotice() : '';
   const draftNotice = state.role === 'youth' ? profileDraftRecoveryCard() : '';
-  return `<div class="grid">${genderNotice}${draftNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}<div class="label" id="profileDraftStatus" style="margin-top:10px;"></div></div></div>`;
+  return `<div class="grid">${genderNotice}${draftNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12" id="profileEditFormCard"><h3>${heading}</h3>${content}<div class="label" id="profileDraftStatus" style="margin-top:10px;"></div></div></div>`;
 }
 
 
