@@ -3512,7 +3512,7 @@ function launchToolkit() {
         </div>
       </div>
       <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
-      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-6"><h3>Concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
       <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
     </div>
   `;
@@ -3615,7 +3615,7 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for inclusion reporting.', 'Inclusion')}
       ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
       ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
