@@ -843,6 +843,21 @@ async function loadImpactDemographicsFromSupabase() {
     return;
   }
   try {
+    // Preferred production path: secure aggregate RPC avoids exposing all profiles to the browser.
+    const rpcResult = await supabase.rpc('get_impact_demographics');
+    if (!rpcResult.error && Array.isArray(rpcResult.data) && rpcResult.data.length) {
+      const row = rpcResult.data[0];
+      const youthReached = Number(row.youth_reached || 0);
+      const youngWomenReached = Number(row.young_women_reached || 0);
+      const youngMenReached = Number(row.young_men_reached || 0);
+      const unknownGender = Number(row.unknown_gender || 0);
+      const womenParticipationRate = youthReached ? Math.round((youngWomenReached / youthReached) * 100) : 0;
+      state.impactDemographics = { youthReached, youngWomenReached, youngMenReached, unknownGender, womenParticipationRate, source: 'rpc' };
+      return;
+    }
+    if (rpcResult.error) console.warn('Impact demographics RPC warning:', rpcResult.error);
+
+    // Fallback for projects that have not created the RPC yet. This may return only the current user if profiles RLS is restrictive.
     const { data, error } = await supabase.from('profiles').select('id, role, gender').eq('role', 'youth');
     if (error) throw error;
     const profiles = data || [];
@@ -851,7 +866,7 @@ async function loadImpactDemographicsFromSupabase() {
     const youngMenReached = profiles.filter(p => isMaleGender(p.gender)).length;
     const unknownGender = profiles.filter(p => !normalizeGender(p.gender)).length;
     const womenParticipationRate = youthReached ? Math.round((youngWomenReached / youthReached) * 100) : 0;
-    state.impactDemographics = { youthReached, youngWomenReached, youngMenReached, unknownGender, womenParticipationRate, source: 'profiles' };
+    state.impactDemographics = { youthReached, youngWomenReached, youngMenReached, unknownGender, womenParticipationRate, source: 'profiles_fallback' };
   } catch (error) {
     console.warn('Impact demographics load warning:', error);
     const visibleYouthReached = Number((state.signalLayer?.countrySignals || []).reduce((sum, item) => sum + Number(item.youthProfiles || 0), 0)) || (state.role === 'youth' ? 1 : 0);
