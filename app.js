@@ -12,6 +12,7 @@ const OPTION_SETS = {
   opportunityTypes: ['Job','Internship','Apprenticeship','Training','Extension'],
   deliveryModes: ['Online','Hybrid','In-person'],
   courseTypes: ['Short Course','Certificate','Diploma','Degree Program','Bootcamp'],
+  communityPostTypes: ['Achievement','Question','Opportunity Tip','Learning Update','Help Request','Motivation','General Update'],
   verificationDocumentTypes: ['Business Registration Certificate','Tax Compliance Certificate','Accreditation or Licence','Organisation Profile','Authorisation Letter','Other Supporting Document'],
   genderOptions: ['Female','Male']
 };
@@ -29,6 +30,7 @@ const demoState = {
     availability: 'Immediate',
     experience: 'Entry Level',
     gender: 'Female',
+    dateOfBirth: '',
     organizationName: '',
     sector: '',
     verified: false
@@ -40,6 +42,13 @@ const demoState = {
   savedOpportunities: [],
   savedCourses: [],
   employerCandidates: [],
+  communityPosts: [],
+  communityComments: [],
+  communityLikes: [],
+  dailyCheckins: [],
+  engagementSummary: { totalPoints: 0, currentStreak: 0, todayCheckedIn: false, lastCheckinType: '', level: 'Starter' },
+  announcements: [],
+  youthPolls: [],
   verificationItems: [],
   verificationDocuments: [],
   notifications: [],
@@ -305,6 +314,7 @@ function youthProfileCompletion() {
     state.profile.availability,
     state.profile.experience,
     state.profile.gender,
+    state.profile.dateOfBirth,
     state.profile.skills,
     state.profile.interests
   ]);
@@ -593,11 +603,11 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 
 function navItems() {
-  if (!currentUser) return ['home', 'opportunities', 'training', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['dashboard', 'verification', 'insights', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['dashboard', 'opportunities', 'training', 'shortlist', 'community', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['dashboard', 'post opportunity', 'candidates', 'community', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['dashboard', 'post training', 'courses', 'community', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['dashboard', 'verification', 'insights', 'community', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
 
@@ -609,6 +619,9 @@ function desc() {
   if (state.view === 'terms') return 'Review the rules, responsibilities and conditions for using Jobs4Youth.';
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
+  if (state.view === 'community') return 'Share achievements, ask questions, support peers and build daily career momentum.';
+  if (state.view === 'polls') return 'Vote on youth priorities and help NYCOM, funders and partners understand what young people need most.';
+  if (state.view === 'announcements') return 'Official NYCOM and Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
   if (state.view === 'champions') return 'Invite youth, track Champion progress and grow the Jobs4Youth movement.';
   if (state.view === 'universities') return 'Onboard universities, TVETs and career offices into Jobs4Youth.';
   if (state.view === 'launch toolkit') return 'Access partner pitch wording, concept note summary and social campaign copy.';
@@ -631,6 +644,7 @@ const PROFILE_DRAFT_FIELD_IDS = [
   'profileEducation',
   'profileAvailability',
   'profileGender',
+  'profileDateOfBirth',
   'profileExperience',
   'profileSkills',
   'profileInterests'
@@ -667,6 +681,7 @@ function collectProfileDraftValues() {
     profileEducation: document.getElementById('profileEducation')?.value || '',
     profileAvailability: document.getElementById('profileAvailability')?.value || '',
     profileGender: normalizeGender(document.getElementById('profileGender')?.value || ''),
+    profileDateOfBirth: document.getElementById('profileDateOfBirth')?.value || '',
     profileExperience: document.getElementById('profileExperience')?.value || '',
     profileSkills: document.getElementById('profileSkills')?.value || '',
     profileInterests: document.getElementById('profileInterests')?.value || ''
@@ -863,6 +878,7 @@ function syncProfileToState(profile) {
     availability: profile.availability || '',
     experience: profile.experience_level || '',
     gender: normalizeGender(profile.gender) || '',
+    dateOfBirth: profile.date_of_birth || profile.dateOfBirth || '',
     organizationName: profile.organization_name || '',
     sector: profile.sector || '',
     verified: !!profile.verified
@@ -1919,7 +1935,10 @@ function youthDash() {
         </div>
       </div>
 
+      ${birthdayWishCard()}
       ${safetyCenterCard(false)}
+      ${dailyCheckinCard()}
+      ${pollsQuickCard()}
 
       <div class="card span-8 next-action-card">
         <div class="section-title">
@@ -2103,6 +2122,7 @@ function youthProfileForm() {
       ${actionSelect('Education','profileEducation', OPTION_SETS.educationLevels, state.profile.education, 'Choose education')}
       ${actionSelect('Availability','profileAvailability', OPTION_SETS.availability, state.profile.availability, 'Choose availability')}
       ${actionSelect('Gender *','profileGender', OPTION_SETS.genderOptions, normalizeGender(state.profile.gender), 'Choose gender')}
+      <label>Date of birth <span class="label">(for birthday wishes)</span><input id="profileDateOfBirth" type="date" value="${escapeHtml(state.profile.dateOfBirth || '')}"/></label>
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
       <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
@@ -2412,6 +2432,899 @@ function socialSharingCentre(compact = false) {
     </div>
   `;
 }
+
+
+
+
+function getLocalYouthPolls() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_polls') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalYouthPolls(items) {
+  try {
+    localStorage.setItem('jobs4youth_polls', JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save local youth polls:', error);
+  }
+}
+function getLocalPollVotes() {
+  try {
+    return JSON.parse(localStorage.getItem(`jobs4youth_poll_votes_${currentUser?.id || 'guest'}`) || '{}');
+  } catch (error) {
+    return {};
+  }
+}
+function saveLocalPollVotes(votes) {
+  try {
+    localStorage.setItem(`jobs4youth_poll_votes_${currentUser?.id || 'guest'}`, JSON.stringify(votes || {}));
+  } catch (error) {
+    console.warn('Could not save local poll votes:', error);
+  }
+}
+function defaultYouthPolls() {
+  return [
+    {
+      id: 'default-youth-support-needs',
+      question: 'What support do you need most right now?',
+      category: 'Youth Needs',
+      options: ['Jobs', 'Internships', 'Skills training', 'Business funding', 'CV support'],
+      votes: {},
+      myVote: '',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'default-platform-priority',
+      question: 'Which Jobs4Youth feature would make you use the platform more often?',
+      category: 'Platform Feedback',
+      options: ['More verified jobs', 'Chat rooms', 'Training alerts', 'CV and interview help', 'Youth success stories'],
+      votes: {},
+      myVote: '',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    }
+  ];
+}
+function normalizePollOptions(value) {
+  if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean).slice(0, 8);
+  return String(value || '').split('\n').map(item => item.trim()).filter(Boolean).slice(0, 8);
+}
+async function loadYouthPollsFromSupabase() {
+  state.youthPolls = [];
+  const localVotes = getLocalPollVotes();
+  if (!isConfigured || !supabase) {
+    const localPolls = getLocalYouthPolls();
+    state.youthPolls = (localPolls.length ? localPolls : defaultYouthPolls()).map(poll => ({ ...poll, myVote: localVotes[poll.id] || poll.myVote || '' }));
+    return;
+  }
+  try {
+    const { data: polls, error: pollError } = await supabase
+      .from('youth_polls')
+      .select('id,question,category,options,created_by,is_active,created_at,updated_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (pollError) throw pollError;
+    const pollIds = (polls || []).map(item => item.id);
+    let votes = [];
+    if (pollIds.length) {
+      const { data: voteData, error: voteError } = await supabase
+        .from('youth_poll_votes')
+        .select('poll_id,user_id,selected_option,created_at')
+        .in('poll_id', pollIds);
+      if (!voteError) votes = voteData || [];
+    }
+    state.youthPolls = (polls || []).map(poll => {
+      const voteCounts = {};
+      normalizePollOptions(poll.options).forEach(option => { voteCounts[option] = 0; });
+      votes.filter(vote => vote.poll_id === poll.id).forEach(vote => {
+        voteCounts[vote.selected_option] = (voteCounts[vote.selected_option] || 0) + 1;
+      });
+      const myVote = currentUser ? (votes.find(vote => vote.poll_id === poll.id && vote.user_id === currentUser.id)?.selected_option || '') : '';
+      return {
+        id: poll.id,
+        question: poll.question,
+        category: poll.category || 'General',
+        options: normalizePollOptions(poll.options),
+        votes: voteCounts,
+        myVote,
+        isActive: poll.is_active,
+        createdAt: poll.created_at,
+        updatedAt: poll.updated_at
+      };
+    });
+    if (!state.youthPolls.length) state.youthPolls = defaultYouthPolls().map(poll => ({ ...poll, myVote: localVotes[poll.id] || '' }));
+  } catch (error) {
+    console.warn('Youth polls load warning, using local fallback:', error);
+    const localPolls = getLocalYouthPolls();
+    state.youthPolls = (localPolls.length ? localPolls : defaultYouthPolls()).map(poll => ({ ...poll, myVote: localVotes[poll.id] || poll.myVote || '' }));
+  }
+}
+function pollResultBar(poll, option) {
+  const votes = poll.votes || {};
+  const total = Object.values(votes).reduce((sum, value) => sum + Number(value || 0), 0);
+  const count = Number(votes[option] || 0);
+  const percent = total ? Math.round((count / total) * 100) : 0;
+  return `
+    <div style="margin-top:10px;">
+      <div class="section-title" style="margin-bottom:4px;"><span class="label">${escapeHtml(option)}</span><span class="label">${count} vote${count === 1 ? '' : 's'} • ${percent}%</span></div>
+      <div class="chartbar"><div style="width:${percent}%"></div></div>
+    </div>
+  `;
+}
+function youthPollCard(poll) {
+  const totalVotes = Object.values(poll.votes || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+  return `
+    <div class="card span-6 youth-poll-card">
+      <div class="section-title">
+        <div>
+          <div class="results-meta"><span class="pill pill-verified">${escapeHtml(poll.category || 'Poll')}</span><span class="pill">${totalVotes} vote${totalVotes === 1 ? '' : 's'}</span></div>
+          <h3 style="margin-top:8px;">${escapeHtml(poll.question || 'Youth poll')}</h3>
+        </div>
+        <span class="pill pill-trust">Youth voice</span>
+      </div>
+      <div class="poll-options" style="display:grid;gap:8px;margin-top:12px;">
+        ${(poll.options || []).map(option => `
+          <button class="secondary ${poll.myVote === option ? 'active' : ''}" onclick="submitYouthPollVote('${escapeHtml(poll.id)}','${escapeHtml(option)}')">${poll.myVote === option ? '✓ ' : ''}${escapeHtml(option)}</button>
+        `).join('')}
+      </div>
+      <div style="margin-top:14px;">
+        ${(poll.options || []).map(option => pollResultBar(poll, option)).join('')}
+      </div>
+      <div class="label" style="margin-top:10px;">${poll.myVote ? `Your vote: ${escapeHtml(poll.myVote)}` : 'Vote to help NYCOM and partners understand youth priorities.'}</div>
+    </div>
+  `;
+}
+function youthPollComposer() {
+  if (state.role !== 'admin') return '';
+  return `
+    <div class="card span-12">
+      <div class="section-title"><div><div class="kicker">Admin youth intelligence</div><h3>Create a youth poll</h3><p class="label">Use polls to collect real-time youth feedback for NYCOM, funders and programme design.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="form" style="margin-top:14px;">
+        <label>Category<select id="pollCategory"><option>Youth Needs</option><option>Platform Feedback</option><option>Training</option><option>Employment</option><option>Entrepreneurship</option><option>Gender Inclusion</option><option>General</option></select></label>
+        <label class="full">Question<input id="pollQuestion" placeholder="e.g. What support do you need most this month?"/></label>
+        <label class="full">Options, one per line<textarea id="pollOptions" placeholder="Jobs\nInternships\nSkills training\nBusiness funding\nCV support"></textarea></label>
+        <button class="primary full" onclick="submitYouthPoll()">Publish poll</button>
+        <div class="label full" id="pollMessage"></div>
+      </div>
+    </div>
+  `;
+}
+function pollInsightsCard() {
+  const polls = state.youthPolls || [];
+  const allVotes = polls.reduce((sum, poll) => sum + Object.values(poll.votes || {}).reduce((s, value) => s + Number(value || 0), 0), 0);
+  const topSignals = [];
+  polls.forEach(poll => {
+    Object.entries(poll.votes || {}).forEach(([option, count]) => {
+      topSignals.push({ poll: poll.question, option, count: Number(count || 0) });
+    });
+  });
+  topSignals.sort((a, b) => b.count - a.count);
+  return `
+    <div class="card span-12">
+      <div class="section-title"><div><div class="kicker">NYCOM youth intelligence</div><h3>What youth are telling us</h3><p class="label">Polls convert daily platform activity into real-time youth feedback for programming, partnerships and funder reporting.</p></div><span class="pill">${allVotes} total vote${allVotes === 1 ? '' : 's'}</span></div>
+      <div class="mini-grid ${topSignals.length > 3 ? '' : 'single-column'}">
+        ${topSignals.slice(0, 6).length ? topSignals.slice(0, 6).map(signal => `
+          <div class="mini-card"><h4>${escapeHtml(signal.option)}</h4><p class="label">${signal.count} vote${signal.count === 1 ? '' : 's'} • ${escapeHtml(signal.poll)}</p></div>
+        `).join('') : `<div class="empty-card"><h4>No poll signals yet</h4><p class="label">Once youth vote, top needs and priorities will appear here.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+function pollsPage() {
+  const polls = state.youthPolls || [];
+  const activeCount = polls.length;
+  const totalVotes = polls.reduce((sum, poll) => sum + Object.values(poll.votes || {}).reduce((s, value) => s + Number(value || 0), 0), 0);
+  const myVotes = polls.filter(poll => poll.myVote).length;
+  return `
+    <div class="grid polls-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Youth Voice Lab</div>
+            <h3>Tell NYCOM and Jobs4Youth what young people need most</h3>
+            <p class="label">Vote in simple polls and help shape opportunities, training, support services and funder priorities.</p>
+          </div>
+          <div class="hero-actions"><button class="secondary" onclick="refreshYouthPolls()">Refresh polls</button><button class="primary" onclick="setView('community')">Open community</button></div>
+        </div>
+      </div>
+      <div class="card span-3"><div class="label">Active polls</div><div class="metric">${activeCount}</div><div class="label">Questions open for youth feedback</div></div>
+      <div class="card span-3"><div class="label">Total votes</div><div class="metric">${totalVotes}</div><div class="label">Youth responses captured</div></div>
+      <div class="card span-3"><div class="label">My votes</div><div class="metric">${myVotes}</div><div class="label">Polls you have answered</div></div>
+      <div class="card span-3"><div class="label">Insight use</div><div class="metric">NYCOM</div><div class="label">Feedback for programmes and partners</div></div>
+      ${youthPollComposer()}
+      ${pollInsightsCard()}
+      ${polls.length ? polls.map(youthPollCard).join('') : `<div class="card span-12"><div class="empty-card"><h4>No youth polls yet</h4><p class="label">Admins can create polls to collect youth feedback.</p></div></div>`}
+    </div>
+  `;
+}
+window.refreshYouthPolls = async function() {
+  await loadYouthPollsFromSupabase();
+  render();
+};
+window.submitYouthPoll = async function() {
+  if (!currentUser || state.role !== 'admin') return showUserMessage('Only admins can create youth polls.');
+  const category = document.getElementById('pollCategory')?.value || 'General';
+  const question = document.getElementById('pollQuestion')?.value.trim() || '';
+  const options = normalizePollOptions(document.getElementById('pollOptions')?.value || '');
+  const msg = document.getElementById('pollMessage');
+  if (msg) msg.textContent = '';
+  if (!question || options.length < 2) {
+    if (msg) msg.textContent = 'Please enter a question and at least two options.';
+    return;
+  }
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('youth_polls').insert([{ category, question, options, created_by: currentUser.id, is_active: true }]);
+      if (error) throw error;
+      await loadYouthPollsFromSupabase();
+      showUserMessage('Youth poll published.');
+      render();
+      return;
+    } catch (error) {
+      console.warn('Youth poll database warning, using local fallback:', error);
+    }
+  }
+  const polls = getLocalYouthPolls();
+  polls.unshift({ id: `local-poll-${Date.now()}`, category, question, options, votes: {}, myVote: '', isActive: true, createdAt: new Date().toISOString() });
+  saveLocalYouthPolls(polls.slice(0, 50));
+  state.youthPolls = polls.slice(0, 50);
+  showUserMessage('Poll saved locally. Create the Supabase tables to publish to all users.');
+  render();
+};
+window.submitYouthPollVote = async function(pollId, selectedOption) {
+  if (!currentUser) return showUserMessage('Please sign in to vote.');
+  const poll = (state.youthPolls || []).find(item => String(item.id) === String(pollId));
+  if (!poll) return showUserMessage('Poll not found.');
+  if (!(poll.options || []).includes(selectedOption)) return showUserMessage('Invalid poll option.');
+  if (isConfigured && supabase && !String(pollId).startsWith('default-') && !String(pollId).startsWith('local-')) {
+    try {
+      const { error } = await supabase.from('youth_poll_votes').upsert([{ poll_id: pollId, user_id: currentUser.id, selected_option: selectedOption }], { onConflict: 'poll_id,user_id' });
+      if (error) throw error;
+      await loadYouthPollsFromSupabase();
+      render();
+      return;
+    } catch (error) {
+      console.warn('Youth poll vote database warning, using local fallback:', error);
+    }
+  }
+  const votes = getLocalPollVotes();
+  const previousVote = votes[pollId] || '';
+  votes[pollId] = selectedOption;
+  saveLocalPollVotes(votes);
+  const polls = (getLocalYouthPolls().length ? getLocalYouthPolls() : defaultYouthPolls()).map(item => {
+    if (String(item.id) !== String(pollId)) return item;
+    const voteCounts = { ...(item.votes || {}) };
+    (item.options || []).forEach(option => { voteCounts[option] = Number(voteCounts[option] || 0); });
+    if (previousVote && voteCounts[previousVote] > 0) voteCounts[previousVote] -= 1;
+    voteCounts[selectedOption] = Number(voteCounts[selectedOption] || 0) + 1;
+    return { ...item, votes: voteCounts, myVote: selectedOption };
+  });
+  saveLocalYouthPolls(polls);
+  state.youthPolls = polls.map(item => ({ ...item, myVote: votes[item.id] || item.myVote || '' }));
+  render();
+};
+
+function isBirthdayToday(dateValue) {
+  if (!dateValue) return false;
+  const parts = String(dateValue).split('-');
+  if (parts.length < 3) return false;
+  const today = new Date();
+  return Number(parts[1]) === today.getMonth() + 1 && Number(parts[2]) === today.getDate();
+}
+
+function pollsQuickCard() {
+  const polls = state.youthPolls || [];
+  const unanswered = polls.filter(poll => !poll.myVote).length;
+  if (!polls.length) return '';
+  return `
+    <div class="card span-12 polls-quick-card">
+      <div class="section-title">
+        <div><div class="kicker">Youth voice</div><h3>${unanswered ? `${unanswered} poll${unanswered === 1 ? '' : 's'} need your voice` : 'Thank you for voting'}</h3><p class="label">Your feedback helps NYCOM, partners and funders design better youth employment and skills support.</p></div>
+        <button class="primary" onclick="setView('polls')">Open Youth Polls</button>
+      </div>
+    </div>
+  `;
+}
+
+function birthdayWishCard() {
+  if (state.role !== 'youth' || !isBirthdayToday(state.profile?.dateOfBirth)) return '';
+  return `
+    <div class="card span-12 birthday-wish-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Birthday celebration</div>
+          <h3>🎂 Happy Birthday, ${escapeHtml(state.profile.name || 'Jobs4Youth member')}!</h3>
+          <p class="label">May this new year bring skills, confidence, opportunities, growth and meaningful work. The Jobs4Youth community is cheering you on.</p>
+        </div>
+        <span class="pill pill-verified">From Jobs4Youth</span>
+      </div>
+      <div class="hero-actions"><button class="primary" onclick="setView('community')">Share a birthday career goal</button><button class="secondary" onclick="setView('opportunities')">Find opportunities</button></div>
+    </div>
+  `;
+}
+function getLocalAnnouncements() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_announcements') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalAnnouncements(items) {
+  try {
+    localStorage.setItem('jobs4youth_announcements', JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save local announcements:', error);
+  }
+}
+async function loadAnnouncementsFromSupabase() {
+  state.announcements = [];
+  if (!isConfigured || !supabase) {
+    state.announcements = getLocalAnnouncements();
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('nycom_announcements')
+      .select('id,title,body,category,created_by,created_at,updated_at,is_active')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    state.announcements = (data || []).map(item => ({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      category: item.category || 'General',
+      createdBy: item.created_by,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      isActive: item.is_active
+    }));
+  } catch (error) {
+    console.warn('Announcements load warning, using local fallback:', error);
+    state.announcements = getLocalAnnouncements();
+  }
+}
+function announcementCard(item) {
+  return `
+    <div class="notification-card notification-card-unread announcement-card">
+      <div class="section-title">
+        <div>
+          <div class="results-meta"><span class="pill pill-verified">${escapeHtml(item.category || 'Announcement')}</span><span class="pill">${escapeHtml(item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Just now')}</span></div>
+          <h3 style="margin-top:8px;">${escapeHtml(item.title || 'Untitled announcement')}</h3>
+        </div>
+        <span class="pill pill-trust">Official update</span>
+      </div>
+      <p>${escapeHtml(item.body || '')}</p>
+      <div class="hero-actions" style="margin-top:12px;"><button class="secondary" onclick="shareAnnouncement('${escapeHtml(item.id)}')">Share update</button></div>
+    </div>
+  `;
+}
+function announcementComposer() {
+  if (state.role !== 'admin') return '';
+  return `
+    <div class="card span-12">
+      <div class="section-title"><div><div class="kicker">Admin broadcast</div><h3>Create NYCOM / Jobs4Youth announcement</h3><p class="label">Use this for official youth alerts, opportunities, campaigns and platform updates.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="form" style="margin-top:14px;">
+        <label>Category<select id="announcementCategory"><option>NYCOM Update</option><option>Opportunity Alert</option><option>Training Alert</option><option>Platform Update</option><option>Campaign</option><option>General</option></select></label>
+        <label class="full">Title<input id="announcementTitle" placeholder="e.g. New opportunities for youth are now available"/></label>
+        <label class="full">Message<textarea id="announcementBody" placeholder="Write a clear and short update for youth."></textarea></label>
+        <button class="primary full" onclick="submitAnnouncement()">Publish announcement</button>
+        <div class="label full" id="announcementMessage"></div>
+      </div>
+    </div>
+  `;
+}
+function announcementsPage() {
+  const items = state.announcements || [];
+  return `
+    <div class="grid announcements-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Official youth updates</div>
+            <h3>NYCOM and Jobs4Youth Announcements</h3>
+            <p class="label">A trusted channel for youth alerts, campaigns, training, events and opportunity updates.</p>
+          </div>
+          <div class="hero-actions"><button class="secondary" onclick="refreshAnnouncements()">Refresh</button><button class="primary" onclick="setView('community')">Open community</button></div>
+        </div>
+      </div>
+      ${announcementComposer()}
+      <div class="card span-12">
+        <div class="section-title"><div><h3>Latest official updates</h3><p class="label">Announcements shown here are intended to be trusted and action-oriented for youth.</p></div><span class="pill">${items.length} update${items.length === 1 ? '' : 's'}</span></div>
+        ${items.length ? items.map(announcementCard).join('') : `<div class="empty-card"><h4>No announcements yet</h4><p class="label">Official NYCOM and Jobs4Youth announcements will appear here once published.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+window.refreshAnnouncements = async function() {
+  await loadAnnouncementsFromSupabase();
+  await loadYouthPollsFromSupabase();
+  render();
+};
+window.submitAnnouncement = async function() {
+  if (!currentUser || state.role !== 'admin') return showUserMessage('Only admins can publish announcements.');
+  const category = document.getElementById('announcementCategory')?.value || 'General';
+  const title = document.getElementById('announcementTitle')?.value.trim() || '';
+  const body = document.getElementById('announcementBody')?.value.trim() || '';
+  const msg = document.getElementById('announcementMessage');
+  if (msg) msg.textContent = '';
+  if (!title || !body) {
+    if (msg) msg.textContent = 'Please enter title and message.';
+    return;
+  }
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('nycom_announcements').insert([{ title, body, category, created_by: currentUser.id, is_active: true }]);
+      if (error) throw error;
+      await loadAnnouncementsFromSupabase();
+      showUserMessage('Announcement published.');
+      render();
+      return;
+    } catch (error) {
+      console.warn('Announcement database warning, using local fallback:', error);
+    }
+  }
+  const items = getLocalAnnouncements();
+  items.unshift({ id: `local-announcement-${Date.now()}`, title, body, category, createdBy: currentUser.id, createdAt: new Date().toISOString(), isActive: true });
+  saveLocalAnnouncements(items.slice(0, 100));
+  state.announcements = items.slice(0, 100);
+  showUserMessage('Announcement saved locally. Create the Supabase table to publish to all users.');
+  render();
+};
+window.shareAnnouncement = function(id) {
+  const item = (state.announcements || []).find(announcement => String(announcement.id) === String(id));
+  const text = item ? `${item.title}\n\n${item.body}\n\nOpen Jobs4Youth: ${window.location.origin || 'https://jobs4youth.org'}` : `Open Jobs4Youth: ${window.location.origin || 'https://jobs4youth.org'}`;
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showUserMessage('Announcement copied for sharing.'));
+  else prompt('Copy announcement:', text);
+};
+
+const DAILY_CHECKIN_OPTIONS = [
+  { type: 'Applied for an opportunity', icon: '✅', points: 25, label: 'I applied for an opportunity' },
+  { type: 'Learned something new', icon: '📚', points: 10, label: 'I learned something new' },
+  { type: 'Improved my profile', icon: '🧑‍💻', points: 15, label: 'I improved my profile' },
+  { type: 'Helped another youth', icon: '🤝', points: 20, label: 'I helped another youth' },
+  { type: 'Still searching', icon: '🔍', points: 5, label: 'I am still searching' }
+];
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+function getCheckinPoints(type) {
+  return DAILY_CHECKIN_OPTIONS.find(item => item.type === type)?.points || 5;
+}
+function getLocalDailyCheckins() {
+  try {
+    return JSON.parse(localStorage.getItem(`jobs4youth_daily_checkins_${currentUser?.id || 'guest'}`) || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalDailyCheckins(items) {
+  try {
+    localStorage.setItem(`jobs4youth_daily_checkins_${currentUser?.id || 'guest'}`, JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save local daily check-ins:', error);
+  }
+}
+function calculateEngagementSummary(checkins = []) {
+  const normalized = (checkins || []).map(item => ({
+    ...item,
+    checkinDate: item.checkinDate || item.checkin_date || todayIsoDate(),
+    points: Number(item.points || getCheckinPoints(item.checkinType || item.checkin_type))
+  }));
+  const byDate = new Map();
+  normalized.forEach(item => {
+    const date = item.checkinDate;
+    if (!date) return;
+    const existing = byDate.get(date);
+    if (!existing || new Date(item.createdAt || item.created_at || 0) > new Date(existing.createdAt || existing.created_at || 0)) byDate.set(date, item);
+  });
+  const uniqueByDate = [...byDate.values()].sort((a, b) => String(b.checkinDate).localeCompare(String(a.checkinDate)));
+  let currentStreak = 0;
+  const cursor = new Date(todayIsoDate());
+  for (let i = 0; i < 366; i += 1) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (byDate.has(key)) {
+      currentStreak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  const totalPoints = normalized.reduce((sum, item) => sum + Number(item.points || 0), 0);
+  const today = byDate.get(todayIsoDate()) || null;
+  let level = 'Starter';
+  if (totalPoints >= 1000) level = 'Career Leader';
+  else if (totalPoints >= 500) level = 'Opportunity Champion';
+  else if (totalPoints >= 250) level = 'Job Ready';
+  else if (totalPoints >= 100) level = 'Builder';
+  return {
+    totalPoints,
+    currentStreak,
+    todayCheckedIn: !!today,
+    lastCheckinType: today ? (today.checkinType || today.checkin_type || '') : '',
+    level,
+    recentCheckins: uniqueByDate.slice(0, 7)
+  };
+}
+async function loadEngagementFromSupabase() {
+  state.dailyCheckins = [];
+  state.engagementSummary = { totalPoints: 0, currentStreak: 0, todayCheckedIn: false, lastCheckinType: '', level: 'Starter', recentCheckins: [] };
+  if (!currentUser || state.role !== 'youth') return;
+  if (!isConfigured || !supabase) {
+    state.dailyCheckins = getLocalDailyCheckins();
+    state.engagementSummary = calculateEngagementSummary(state.dailyCheckins);
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('daily_checkins')
+      .select('id,user_id,checkin_type,checkin_date,points,note,created_at')
+      .eq('user_id', currentUser.id)
+      .order('checkin_date', { ascending: false })
+      .limit(120);
+    if (error) throw error;
+    state.dailyCheckins = (data || []).map(item => ({
+      id: item.id,
+      userId: item.user_id,
+      checkinType: item.checkin_type,
+      checkinDate: item.checkin_date,
+      points: item.points,
+      note: item.note || '',
+      createdAt: item.created_at
+    }));
+    state.engagementSummary = calculateEngagementSummary(state.dailyCheckins);
+  } catch (error) {
+    console.warn('Daily check-in load warning, using local fallback:', error);
+    state.dailyCheckins = getLocalDailyCheckins();
+    state.engagementSummary = calculateEngagementSummary(state.dailyCheckins);
+  }
+}
+function dailyCheckinCard() {
+  const summary = state.engagementSummary || calculateEngagementSummary(state.dailyCheckins || []);
+  const progressWidth = Math.min(100, Math.round((summary.totalPoints / 500) * 100));
+  return `
+    <div class="card span-12 daily-checkin-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Daily career momentum</div>
+          <h3>${summary.todayCheckedIn ? 'You checked in today' : 'What progress did you make today?'}</h3>
+          <p class="label">Build a daily habit around applying, learning, improving your profile, helping peers and staying active in the opportunity ecosystem.</p>
+        </div>
+        <div class="job-badges"><span class="pill pill-verified">${escapeHtml(summary.level || 'Starter')}</span><span class="pill">${summary.currentStreak || 0}-day streak</span></div>
+      </div>
+      <div class="pathway-summary-row">
+        <span class="pathway-summary-item"><strong>Points:</strong>&nbsp;${summary.totalPoints || 0}</span>
+        <span class="pathway-summary-item"><strong>Today:</strong>&nbsp;${summary.todayCheckedIn ? escapeHtml(summary.lastCheckinType || 'Checked in') : 'Not checked in yet'}</span>
+        <span class="pathway-summary-item"><strong>Level:</strong>&nbsp;${escapeHtml(summary.level || 'Starter')}</span>
+      </div>
+      <div class="chartbar" style="margin-top:12px;"><div style="width:${progressWidth}%"></div></div>
+      <div class="daily-checkin-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px;">
+        ${DAILY_CHECKIN_OPTIONS.map(item => `
+          <button class="secondary" onclick="submitDailyCheckin('${escapeHtml(item.type)}')" ${summary.todayCheckedIn ? 'title="You can update today\'s check-in"' : ''}>${item.icon} ${escapeHtml(item.label)} <span class="pill">+${item.points}</span></button>
+        `).join('')}
+      </div>
+      <div class="label" id="dailyCheckinMessage" style="margin-top:10px;">${summary.todayCheckedIn ? 'You can update today\'s check-in if your progress changed.' : 'Check in once per day to build your streak.'}</div>
+    </div>
+  `;
+}
+window.submitDailyCheckin = async function(type) {
+  if (!currentUser) return showUserMessage('Please sign in to record your daily check-in.');
+  if (state.role !== 'youth') return showUserMessage('Daily check-ins are currently for youth accounts.');
+  const normalizedType = DAILY_CHECKIN_OPTIONS.some(item => item.type === type) ? type : 'Still searching';
+  const points = getCheckinPoints(normalizedType);
+  const checkinDate = todayIsoDate();
+  const msg = document.getElementById('dailyCheckinMessage');
+  if (msg) msg.textContent = 'Saving your check-in...';
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('daily_checkins').upsert([{
+        user_id: currentUser.id,
+        checkin_type: normalizedType,
+        checkin_date: checkinDate,
+        points,
+        note: ''
+      }], { onConflict: 'user_id,checkin_date' });
+      if (error) throw error;
+      await loadEngagementFromSupabase();
+      if (msg) msg.textContent = 'Daily check-in saved. Keep your career streak alive.';
+      render();
+      return;
+    } catch (error) {
+      console.warn('Daily check-in database warning, using local fallback:', error);
+    }
+  }
+  const current = getLocalDailyCheckins().filter(item => (item.checkinDate || item.checkin_date) !== checkinDate);
+  current.unshift({ id: `local-checkin-${Date.now()}`, userId: currentUser.id, checkinType: normalizedType, checkinDate, points, createdAt: new Date().toISOString() });
+  saveLocalDailyCheckins(current.slice(0, 180));
+  state.dailyCheckins = current.slice(0, 180);
+  state.engagementSummary = calculateEngagementSummary(state.dailyCheckins);
+  if (msg) msg.textContent = 'Daily check-in saved locally. Create the Supabase table to sync across devices.';
+  render();
+};
+
+function getLocalCommunityPosts() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_community_posts') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalCommunityPosts(posts) {
+  try {
+    localStorage.setItem('jobs4youth_community_posts', JSON.stringify(posts || []));
+  } catch (error) {
+    console.warn('Could not save local community posts:', error);
+  }
+}
+function getCommunityAuthorName(post) {
+  return post.authorName || post.author_name || 'Jobs4Youth member';
+}
+function getCommunityLikes(post) {
+  return Number(post.likesCount ?? post.likes_count ?? post.likes ?? 0);
+}
+function getCommunityComments(post) {
+  return Array.isArray(post.comments) ? post.comments : [];
+}
+function communityPostTypeBadge(type) {
+  const value = type || 'General Update';
+  const cls = value === 'Achievement' ? 'pill-verified' : value === 'Help Request' || value === 'Question' ? 'pill-trust' : '';
+  return `<span class="pill ${cls}">${escapeHtml(value)}</span>`;
+}
+function communityPostCard(post) {
+  const comments = getCommunityComments(post);
+  const postId = escapeHtml(post.id);
+  return `
+    <div class="community-post-card job ${post.postType === 'Achievement' || post.post_type === 'Achievement' ? 'job-verified' : ''}">
+      <div style="width:100%;">
+        <div class="section-title">
+          <div>
+            <div class="results-meta">
+              ${communityPostTypeBadge(post.postType || post.post_type)}
+              <span class="pill">${escapeHtml(getCommunityAuthorName(post))}</span>
+              <span class="pill">${escapeHtml(post.createdAt || post.created_at ? new Date(post.createdAt || post.created_at).toLocaleString() : 'Just now')}</span>
+            </div>
+            <h3 style="margin-top:8px;">${escapeHtml(post.title || communityTitleFromType(post.postType || post.post_type))}</h3>
+          </div>
+          <span class="pill pill-verified">Community</span>
+        </div>
+        <p class="community-post-content">${escapeHtml(post.content || '')}</p>
+        <div class="hero-actions" style="margin-top:12px;">
+          <button class="secondary" onclick="likeCommunityPost('${postId}')">👍 Like (${getCommunityLikes(post)})</button>
+          <button class="secondary" onclick="toggleCommunityCommentBox('${postId}')">💬 Comment (${comments.length})</button>
+          <button class="secondary" onclick="shareCommunityPost('${postId}')">Share</button>
+        </div>
+        <div id="commentBox-${postId}" class="community-comment-box" style="display:none;margin-top:12px;">
+          <div class="form">
+            <label class="full">Add a supportive comment<textarea id="commentInput-${postId}" placeholder="Write a short response, encouragement, or helpful advice."></textarea></label>
+            <button class="primary full" onclick="submitCommunityComment('${postId}')">Post comment</button>
+          </div>
+        </div>
+        ${comments.length ? `<div class="community-comments" style="margin-top:12px;">${comments.slice(0, 4).map(comment => `
+          <div class="support-admin-note" style="margin-top:8px;"><b>${escapeHtml(comment.authorName || comment.author_name || 'Member')}:</b> ${escapeHtml(comment.content || '')}</div>
+        `).join('')}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+function communityTitleFromType(type) {
+  if (type === 'Achievement') return 'Achievement shared';
+  if (type === 'Question') return 'Question for the community';
+  if (type === 'Opportunity Tip') return 'Opportunity tip shared';
+  if (type === 'Learning Update') return 'Learning update';
+  if (type === 'Help Request') return 'Help request';
+  if (type === 'Motivation') return 'Motivation for the community';
+  return 'Community update';
+}
+async function loadCommunityFromSupabase() {
+  state.communityPosts = [];
+  if (!isConfigured || !supabase) {
+    state.communityPosts = getLocalCommunityPosts();
+    return;
+  }
+  try {
+    const { data: posts, error: postsError } = await supabase
+      .from('social_posts')
+      .select('id,user_id,post_type,content,visibility,created_at,updated_at')
+      .eq('visibility', 'Public')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (postsError) throw postsError;
+    const userIds = [...new Set((posts || []).map(p => p.user_id).filter(Boolean))];
+    const postIds = (posts || []).map(p => p.id);
+    let profileMap = {};
+    let likes = [];
+    let comments = [];
+    if (userIds.length) {
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').in('id', userIds);
+      profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    }
+    if (postIds.length) {
+      const { data: likesData } = await supabase.from('social_post_likes').select('post_id,user_id').in('post_id', postIds);
+      likes = likesData || [];
+      const { data: commentsData } = await supabase.from('social_post_comments').select('id,post_id,user_id,content,created_at').in('post_id', postIds).order('created_at', { ascending: true });
+      comments = commentsData || [];
+    }
+    const commentUserIds = [...new Set(comments.map(c => c.user_id).filter(Boolean))];
+    if (commentUserIds.length) {
+      const missing = commentUserIds.filter(id => !profileMap[id]);
+      if (missing.length) {
+        const { data: commentProfiles } = await supabase.from('profiles').select('id, full_name, role').in('id', missing);
+        (commentProfiles || []).forEach(p => { profileMap[p.id] = p; });
+      }
+    }
+    state.communityPosts = (posts || []).map(post => ({
+      id: post.id,
+      userId: post.user_id,
+      authorName: profileMap[post.user_id]?.full_name || 'Jobs4Youth member',
+      postType: post.post_type || 'General Update',
+      content: post.content || '',
+      visibility: post.visibility || 'Public',
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      likesCount: likes.filter(like => like.post_id === post.id).length,
+      likedByMe: currentUser ? likes.some(like => like.post_id === post.id && like.user_id === currentUser.id) : false,
+      comments: comments.filter(comment => comment.post_id === post.id).map(comment => ({
+        id: comment.id,
+        authorName: profileMap[comment.user_id]?.full_name || 'Member',
+        content: comment.content,
+        createdAt: comment.created_at
+      }))
+    }));
+  } catch (error) {
+    console.warn('Community feed load warning, using local fallback:', error);
+    state.communityPosts = getLocalCommunityPosts();
+  }
+}
+function communityComposer() {
+  if (!currentUser) {
+    return `
+      <div class="card span-12">
+        <div class="section-title"><div><h3>Join the Jobs4Youth community</h3><p class="label">Create an account to post achievements, ask questions, comment and interact with other youth.</p></div><button class="primary" onclick="openSignup()">Create account</button></div>
+      </div>
+    `;
+  }
+  return `
+    <div class="card span-12 community-composer-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Youth opportunity community</div>
+          <h3>What are you working on today?</h3>
+          <p class="label">Share achievements, questions, opportunity tips, learning updates or requests for help. Keep it respectful and career-focused.</p>
+        </div>
+        <span class="pill pill-verified">Text-only MVP</span>
+      </div>
+      <div class="form" style="margin-top:14px;">
+        ${actionSelect('Post type','communityPostType', OPTION_SETS.communityPostTypes, '', 'Choose post type')}
+        <label class="full">Your update<textarea id="communityPostContent" maxlength="1200" placeholder="Example: I completed my Career Passport today. Or: Can someone help me prepare for an interview?"></textarea></label>
+        <button class="primary full" onclick="submitCommunityPost()">Post to community</button>
+        <div class="label full" id="communityPostMessage"></div>
+      </div>
+    </div>
+  `;
+}
+function communityPage() {
+  const posts = state.communityPosts || [];
+  const achievements = posts.filter(p => (p.postType || p.post_type) === 'Achievement').length;
+  const questions = posts.filter(p => ['Question','Help Request'].includes(p.postType || p.post_type)).length;
+  return `
+    <div class="grid community-page">
+      <div class="card span-12 community-hero-card">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Jobs4Youth Community</div>
+            <h3>The daily youth opportunity feed</h3>
+            <p class="label">A safe, text-first community where youth share wins, ask questions, exchange opportunity tips and build career momentum together.</p>
+          </div>
+          <div class="hero-actions"><button class="primary" onclick="setView('profile')">Improve my profile</button><button class="secondary" onclick="shareJobs4Youth('whatsapp')">Invite friends</button></div>
+        </div>
+      </div>
+      <div class="card span-3"><div class="label">Community posts</div><div class="metric">${posts.length}</div><div class="label">Updates shared by members</div></div>
+      <div class="card span-3"><div class="label">Achievements</div><div class="metric">${achievements}</div><div class="label">Wins shared publicly</div></div>
+      <div class="card span-3"><div class="label">Questions and help</div><div class="metric">${questions}</div><div class="label">Peer support requests</div></div>
+      <div class="card span-3"><div class="label">Daily habit</div><div class="metric">1</div><div class="label">Post or help one youth today</div></div>
+      ${communityComposer()}
+      <div class="card span-12">
+        <div class="section-title"><div><h3>Latest from the community</h3><p class="label">Posts are public to signed-in and browsing users. Keep the feed constructive, safe and opportunity-focused.</p></div><button class="secondary" onclick="refreshCommunityFeed()">Refresh feed</button></div>
+        ${posts.length ? posts.map(communityPostCard).join('') : `<div class="empty-card"><h4>No community posts yet</h4><p class="label">Be the first to share an achievement, question, opportunity tip or learning update.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+window.refreshCommunityFeed = async function() {
+  await loadCommunityFromSupabase();
+  await loadAnnouncementsFromSupabase();
+  render();
+};
+window.submitCommunityPost = async function() {
+  if (!currentUser) return showUserMessage('Please sign in to post to the community.');
+  const msg = document.getElementById('communityPostMessage');
+  if (msg) msg.textContent = '';
+  const postType = document.getElementById('communityPostType')?.value || '';
+  const content = document.getElementById('communityPostContent')?.value.trim() || '';
+  if (!postType || !content) {
+    if (msg) msg.textContent = 'Please choose a post type and write your update.';
+    return;
+  }
+  if (content.length > 1200) {
+    if (msg) msg.textContent = 'Please keep posts under 1,200 characters.';
+    return;
+  }
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('social_posts').insert([{ user_id: currentUser.id, post_type: postType, content, visibility: 'Public' }]);
+      if (error) throw error;
+      await loadCommunityFromSupabase();
+      showUserMessage('Posted to the Jobs4Youth community.');
+      render();
+      return;
+    } catch (error) {
+      console.warn('Community post database warning, using local fallback:', error);
+    }
+  }
+  const posts = getLocalCommunityPosts();
+  posts.unshift({ id: `local-${Date.now()}`, userId: currentUser?.id || 'local', authorName: state.profile?.name || 'Jobs4Youth member', postType, content, visibility: 'Public', createdAt: new Date().toISOString(), likesCount: 0, comments: [] });
+  saveLocalCommunityPosts(posts.slice(0, 100));
+  state.communityPosts = posts.slice(0, 100);
+  showUserMessage('Posted locally. Create Supabase community tables to make posts visible to everyone.');
+  render();
+};
+window.likeCommunityPost = async function(postId) {
+  if (!currentUser) return showUserMessage('Please sign in to like community posts.');
+  if (isConfigured && supabase && !String(postId).startsWith('local-')) {
+    try {
+      const { error } = await supabase.from('social_post_likes').insert([{ post_id: postId, user_id: currentUser.id }]);
+      if (error && !String(error.message || '').toLowerCase().includes('duplicate')) throw error;
+      await loadCommunityFromSupabase();
+      render();
+      return;
+    } catch (error) {
+      console.warn('Community like warning, using local fallback:', error);
+    }
+  }
+  const posts = getLocalCommunityPosts();
+  const next = posts.map(post => String(post.id) === String(postId) ? { ...post, likesCount: getCommunityLikes(post) + 1 } : post);
+  saveLocalCommunityPosts(next);
+  state.communityPosts = next;
+  render();
+};
+window.toggleCommunityCommentBox = function(postId) {
+  const box = document.getElementById(`commentBox-${postId}`);
+  if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+};
+window.submitCommunityComment = async function(postId) {
+  if (!currentUser) return showUserMessage('Please sign in to comment.');
+  const input = document.getElementById(`commentInput-${postId}`);
+  const content = input?.value.trim() || '';
+  if (!content) return showUserMessage('Please write a comment first.');
+  if (isConfigured && supabase && !String(postId).startsWith('local-')) {
+    try {
+      const { error } = await supabase.from('social_post_comments').insert([{ post_id: postId, user_id: currentUser.id, content }]);
+      if (error) throw error;
+      await loadCommunityFromSupabase();
+      render();
+      return;
+    } catch (error) {
+      console.warn('Community comment warning, using local fallback:', error);
+    }
+  }
+  const posts = getLocalCommunityPosts();
+  const next = posts.map(post => String(post.id) === String(postId) ? { ...post, comments: [...getCommunityComments(post), { id: `comment-${Date.now()}`, authorName: state.profile?.name || 'Member', content, createdAt: new Date().toISOString() }] } : post);
+  saveLocalCommunityPosts(next);
+  state.communityPosts = next;
+  render();
+};
+window.shareCommunityPost = function(postId) {
+  const post = (state.communityPosts || []).find(item => String(item.id) === String(postId));
+  const text = post ? `Jobs4Youth community update: ${post.content}\n\nJoin Jobs4Youth: ${window.location.origin || 'https://jobs4youth.org'}` : `Join Jobs4Youth: ${window.location.origin || 'https://jobs4youth.org'}`;
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showUserMessage('Community post copied for sharing.'));
+  else prompt('Copy community post:', text);
+};
+
 function campusChampions() {
   const stats = getChampionStats();
   const progressWidth = Math.min(100, Math.round((stats.friendsInvited / Math.max(stats.nextTarget, 1)) * 100));
@@ -3377,6 +4290,9 @@ function render() {
   else if (state.view === 'privacy') c = privacy();
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
+  else if (state.view === 'community') c = communityPage();
+  else if (state.view === 'polls') c = pollsPage();
+  else if (state.view === 'announcements') c = announcementsPage();
   else if (state.view === 'impact') c = impactEvidence();
   else if (state.view === 'champions') c = campusChampions();
   else if (state.view === 'universities') c = universitiesPage();
@@ -3585,11 +4501,13 @@ async function handleAuthSubmit() {
   await loadCoursesFromSupabase();
   await loadApplicationsFromSupabase();
   await loadSavedItemsFromSupabase();
+  await loadEngagementFromSupabase();
   await loadSignalLayerFromSupabase();
   await loadImpactDemographicsFromSupabase();
   await loadVerificationQueueFromSupabase();
   await loadVerificationDocumentsFromSupabase();
   await loadNotificationsFromSupabase();
+  await loadCommunityFromSupabase();
   closeAuthModal();
   state.view = 'dashboard';
   alert(authMode === 'signup' ? 'Account created successfully.' : 'Signed in successfully.');
@@ -3626,18 +4544,19 @@ window.saveProfile = async function () {
     availability: document.getElementById('profileAvailability')?.value || '',
     experience_level: document.getElementById('profileExperience')?.value || '',
     gender: selectedGender,
+    date_of_birth: document.getElementById('profileDateOfBirth')?.value || null,
     skills: document.getElementById('profileSkills')?.value || '',
     interests: document.getElementById('profileInterests')?.value || '',
     updated_at: new Date().toISOString()
   };
   const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
   if (error) {
-    console.warn('Profile save with gender failed, retrying without optional gender field:', error);
-    const { gender, ...fallbackUpdates } = updates;
+    console.warn('Profile save with optional fields failed, retrying without optional impact fields:', error);
+    const { gender, date_of_birth, ...fallbackUpdates } = updates;
     const retry = await supabase.from('profiles').update(fallbackUpdates).eq('id', user.id);
     if (retry.error) return alert(`❌ Failed to save profile: ${retry.error.message}`);
   }
-  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, gender: updates.gender, skills: updates.skills, interests: updates.interests };
+  state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, gender: updates.gender, dateOfBirth: updates.date_of_birth || '', skills: updates.skills, interests: updates.interests };
   clearProfileDraft();
   await loadImpactDemographicsFromSupabase();
   alert('✅ Profile saved successfully! Draft cleared.');
@@ -3682,11 +4601,13 @@ async function initializeApp() {
     await loadCoursesFromSupabase();
     await loadApplicationsFromSupabase();
     await loadSavedItemsFromSupabase();
+    await loadEngagementFromSupabase();
     await loadSignalLayerFromSupabase();
     await loadImpactDemographicsFromSupabase();
-  await loadVerificationQueueFromSupabase();
+    await loadVerificationQueueFromSupabase();
     await loadVerificationDocumentsFromSupabase();
     await loadNotificationsFromSupabase();
+    await loadCommunityFromSupabase();
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setTimeout(() => completePasswordRecovery(), 100);
@@ -3705,10 +4626,13 @@ async function initializeApp() {
       await loadJobsFromSupabase();
       await loadCoursesFromSupabase();
       await loadApplicationsFromSupabase();
+      await loadSavedItemsFromSupabase();
+      await loadEngagementFromSupabase();
       await loadSignalLayerFromSupabase();
       await loadVerificationQueueFromSupabase();
       await loadVerificationDocumentsFromSupabase();
       await loadNotificationsFromSupabase();
+      await loadCommunityFromSupabase();
       render();
     });
   }
