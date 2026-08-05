@@ -606,10 +606,10 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 function navItems() {
   if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'chats', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'youth') return ['community', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'employer') return ['community', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  if (state.role === 'institution') return ['community', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
-  return ['community', 'dashboard', 'verification', 'insights', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'youth') return ['community', 'chats', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'employer') return ['community', 'chats', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  if (state.role === 'institution') return ['community', 'chats', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
+  return ['community', 'chats', 'dashboard', 'verification', 'insights', 'polls', 'announcements', 'impact', 'launch toolkit', 'notifications', 'about', 'privacy', 'terms', 'contact'];
 }
 
 
@@ -622,9 +622,9 @@ function desc() {
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
   if (state.view === 'community') return 'Share achievements, ask questions, support peers and build daily career momentum.';
-  if (state.view === 'chats') return 'Join safe public opportunity chat rooms for jobs, CV help, skills, NYCOM updates and peer support.';
-  if (state.view === 'polls') return 'Vote on youth priorities and help NYCOM, funders and partners understand what young people need most.';
-  if (state.view === 'announcements') return 'Official NYCOM and Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
+  if (state.view === 'chats') return 'Join safe public opportunity chat rooms for jobs, CV help, skills, official updates and peer support.';
+  if (state.view === 'polls') return 'Vote on youth priorities and help official partners and funders understand what young people need most.';
+  if (state.view === 'announcements') return 'Official Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
   if (state.view === 'champions') return 'Invite youth, track Champion progress and grow the Jobs4Youth movement.';
   if (state.view === 'universities') return 'Onboard universities, TVETs and career offices into Jobs4Youth.';
   if (state.view === 'launch toolkit') return 'Access partner pitch wording, concept note summary and social campaign copy.';
@@ -826,7 +826,7 @@ function genderRequiredNotice() {
         <div>
           <div class="kicker">Mandatory impact reporting field</div>
           <h3>Complete gender before continuing</h3>
-          <p class="label">Jobs4Youth reports Young Women Reached and Women Participation Rate for funders and partners. Please select Female or Male to continue using youth features.</p>
+          <p class="label">Jobs4Youth reports Young Women Reached and Women Participation Rate for partners and funders. Please select Female or Male to continue using youth features.</p>
         </div>
         <span class="pill pill-verified">Required</span>
       </div>
@@ -2535,7 +2535,7 @@ const CHAT_ROOMS = [
   { id: 'young-women-in-work', name: 'Young Women in Work', description: 'Focused space for young women employment, leadership and skills pathways.' },
   { id: 'campus-champions', name: 'Campus Champions', description: 'Coordinate ambassadors, campus onboarding and referrals.' },
   { id: 'malawi-youth-opportunities', name: 'Malawi Youth Opportunities', description: 'Opportunities, events and support for youth in Malawi.' },
-  { id: 'nycom-youth-desk', name: 'NYCOM Youth Desk', description: 'Questions and updates linked to NYCOM and youth development support.' }
+  { id: 'youth-help-desk', name: 'Youth Help Desk', description: 'Questions and updates linked to youth development support.' }
 ];
 
 function getLocalChatReports() {
@@ -2845,7 +2845,7 @@ function chatsQuickCard() {
   return `
     <div class="card span-12 chats-quick-card">
       <div class="section-title">
-        <div><div class="kicker">Live peer support</div><h3>Join Jobs4Youth chat rooms</h3><p class="label">Use public rooms for jobs, internships, CV help, skills, agriculture opportunities, digital skills, young women in work and NYCOM youth support.</p></div>
+        <div><div class="kicker">Live peer support</div><h3>Join Jobs4Youth chat rooms</h3><p class="label">Use public rooms for jobs, internships, CV help, skills, agriculture opportunities, digital skills, young women in work and youth support.</p></div>
         <button class="primary" onclick="setView('chats')">Open Chats</button>
       </div>
     </div>
@@ -2990,7 +2990,7 @@ function youthPollCard(poll) {
       <div style="margin-top:14px;">
         ${(poll.options || []).map(option => pollResultBar(poll, option)).join('')}
       </div>
-      <div class="label" style="margin-top:10px;">${poll.myVote ? `Your vote: ${escapeHtml(poll.myVote)}` : 'Vote to help NYCOM and partners understand youth priorities.'}</div>
+      <div class="label" style="margin-top:10px;">${poll.myVote ? `Your vote: ${escapeHtml(poll.myVote)}` : 'Vote to help partners understand youth priorities.'}</div>
     </div>
   `;
 }
@@ -2998,7 +2998,7 @@ function youthPollComposer() {
   if (state.role !== 'admin') return '';
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">Admin youth intelligence</div><h3>Create a youth poll</h3><p class="label">Use polls to collect real-time youth feedback for NYCOM, funders and programme design.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="section-title"><div><div class="kicker">Admin youth intelligence</div><h3>Create a youth poll</h3><p class="label">Use polls to collect real-time youth feedback for partners, funders and programme design.</p></div><span class="pill pill-verified">Admin only</span></div>
       <div class="form" style="margin-top:14px;">
         <label>Category<select id="pollCategory"><option>Youth Needs</option><option>Platform Feedback</option><option>Training</option><option>Employment</option><option>Entrepreneurship</option><option>Gender Inclusion</option><option>General</option></select></label>
         <label class="full">Question<input id="pollQuestion" placeholder="e.g. What support do you need most this month?"/></label>
@@ -3021,7 +3021,7 @@ function pollInsightsCard() {
   topSignals.sort((a, b) => b.count - a.count);
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">NYCOM youth intelligence</div><h3>What youth are telling us</h3><p class="label">Polls convert daily platform activity into real-time youth feedback for programming, partnerships and funder reporting.</p></div><span class="pill">${allVotes} total vote${allVotes === 1 ? '' : 's'}</span></div>
+      <div class="section-title"><div><div class="kicker">Youth intelligence</div><h3>What youth are telling us</h3><p class="label">Polls convert daily platform activity into real-time youth feedback for programming, partnerships and funder reporting.</p></div><span class="pill">${allVotes} total vote${allVotes === 1 ? '' : 's'}</span></div>
       <div class="mini-grid ${topSignals.length > 3 ? '' : 'single-column'}">
         ${topSignals.slice(0, 6).length ? topSignals.slice(0, 6).map(signal => `
           <div class="mini-card"><h4>${escapeHtml(signal.option)}</h4><p class="label">${signal.count} vote${signal.count === 1 ? '' : 's'} • ${escapeHtml(signal.poll)}</p></div>
@@ -3041,7 +3041,7 @@ function pollsPage() {
         <div class="section-title">
           <div>
             <div class="kicker">Youth Voice Lab</div>
-            <h3>Tell NYCOM and Jobs4Youth what young people need most</h3>
+            <h3>Tell Jobs4Youth what young people need most</h3>
             <p class="label">Vote in simple polls and help shape opportunities, training, support services and funder priorities.</p>
           </div>
           <div class="hero-actions"><button class="secondary" onclick="refreshYouthPolls()">Refresh polls</button><button class="primary" onclick="setView('community')">Open community</button></div>
@@ -3050,7 +3050,7 @@ function pollsPage() {
       <div class="card span-3"><div class="label">Active polls</div><div class="metric">${activeCount}</div><div class="label">Questions open for youth feedback</div></div>
       <div class="card span-3"><div class="label">Total votes</div><div class="metric">${totalVotes}</div><div class="label">Youth responses captured</div></div>
       <div class="card span-3"><div class="label">My votes</div><div class="metric">${myVotes}</div><div class="label">Polls you have answered</div></div>
-      <div class="card span-3"><div class="label">Insight use</div><div class="metric">NYCOM</div><div class="label">Feedback for programmes and partners</div></div>
+      <div class="card span-3"><div class="label">Insight use</div><div class="metric">Live</div><div class="label">Feedback for programmes and partners</div></div>
       ${youthPollComposer()}
       ${pollInsightsCard()}
       ${polls.length ? polls.map(youthPollCard).join('') : `<div class="card span-12"><div class="empty-card"><h4>No youth polls yet</h4><p class="label">Admins can create polls to collect youth feedback.</p></div></div>`}
@@ -3139,7 +3139,7 @@ function pollsQuickCard() {
   return `
     <div class="card span-12 polls-quick-card">
       <div class="section-title">
-        <div><div class="kicker">Youth voice</div><h3>${unanswered ? `${unanswered} poll${unanswered === 1 ? '' : 's'} need your voice` : 'Thank you for voting'}</h3><p class="label">Your feedback helps NYCOM, partners and funders design better youth employment and skills support.</p></div>
+        <div><div class="kicker">Youth voice</div><h3>${unanswered ? `${unanswered} poll${unanswered === 1 ? '' : 's'} need your voice` : 'Thank you for voting'}</h3><p class="label">Your feedback helps partners and funders design better youth employment and skills support.</p></div>
         <button class="primary" onclick="setView('polls')">Open Youth Polls</button>
       </div>
     </div>
@@ -3184,7 +3184,7 @@ async function loadAnnouncementsFromSupabase() {
   }
   try {
     const { data, error } = await supabase
-      .from('nycom_announcements')
+      .from('platform_announcements')
       .select('id,title,body,category,created_by,created_at,updated_at,is_active')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -3224,9 +3224,9 @@ function announcementComposer() {
   if (state.role !== 'admin') return '';
   return `
     <div class="card span-12">
-      <div class="section-title"><div><div class="kicker">Admin broadcast</div><h3>Create NYCOM / Jobs4Youth announcement</h3><p class="label">Use this for official youth alerts, opportunities, campaigns and platform updates.</p></div><span class="pill pill-verified">Admin only</span></div>
+      <div class="section-title"><div><div class="kicker">Admin broadcast</div><h3>Create Jobs4Youth announcement</h3><p class="label">Use this for official youth alerts, opportunities, campaigns and platform updates.</p></div><span class="pill pill-verified">Admin only</span></div>
       <div class="form" style="margin-top:14px;">
-        <label>Category<select id="announcementCategory"><option>NYCOM Update</option><option>Opportunity Alert</option><option>Training Alert</option><option>Platform Update</option><option>Campaign</option><option>General</option></select></label>
+        <label>Category<select id="announcementCategory"><option value="General">Official Update</option><option>Opportunity Alert</option><option>Training Alert</option><option>Platform Update</option><option>Campaign</option><option>General</option></select></label>
         <label class="full">Title<input id="announcementTitle" placeholder="e.g. New opportunities for youth are now available"/></label>
         <label class="full">Message<textarea id="announcementBody" placeholder="Write a clear and short update for youth."></textarea></label>
         <button class="primary full" onclick="submitAnnouncement()">Publish announcement</button>
@@ -3243,7 +3243,7 @@ function announcementsPage() {
         <div class="section-title">
           <div>
             <div class="kicker">Official youth updates</div>
-            <h3>NYCOM and Jobs4Youth Announcements</h3>
+            <h3>Jobs4Youth Announcements</h3>
             <p class="label">A trusted channel for youth alerts, campaigns, training, events and opportunity updates.</p>
           </div>
           <div class="hero-actions"><button class="secondary" onclick="refreshAnnouncements()">Refresh</button><button class="primary" onclick="setView('community')">Open community</button></div>
@@ -3252,7 +3252,7 @@ function announcementsPage() {
       ${announcementComposer()}
       <div class="card span-12">
         <div class="section-title"><div><h3>Latest official updates</h3><p class="label">Announcements shown here are intended to be trusted and action-oriented for youth.</p></div><span class="pill">${items.length} update${items.length === 1 ? '' : 's'}</span></div>
-        ${items.length ? items.map(announcementCard).join('') : `<div class="empty-card"><h4>No announcements yet</h4><p class="label">Official NYCOM and Jobs4Youth announcements will appear here once published.</p></div>`}
+        ${items.length ? items.map(announcementCard).join('') : `<div class="empty-card"><h4>No announcements yet</h4><p class="label">Official Jobs4Youth announcements will appear here once published.</p></div>`}
       </div>
     </div>
   `;
@@ -3275,7 +3275,7 @@ window.submitAnnouncement = async function() {
   }
   if (isConfigured && supabase) {
     try {
-      const { error } = await supabase.from('nycom_announcements').insert([{ title, body, category, created_by: currentUser.id, is_active: true }]);
+      const { error } = await supabase.from('platform_announcements').insert([{ title, body, category, created_by: currentUser.id, is_active: true }]);
       if (error) throw error;
       await loadAnnouncementsFromSupabase();
       showUserMessage('Announcement published.');
@@ -3845,7 +3845,7 @@ function launchToolkit() {
         </div>
       </div>
       <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
-      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-6"><h3>Funder-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
       <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
     </div>
   `;
@@ -3948,7 +3948,7 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for funder-ready inclusion reporting.', 'Inclusion')}
       ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
       ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
