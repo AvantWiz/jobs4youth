@@ -50,6 +50,8 @@ const demoState = {
   announcements: [],
   youthPolls: [],
   questLeaderboard: [],
+  chatRooms: [],
+  chatMessages: [],
   verificationItems: [],
   verificationDocuments: [],
   notifications: [],
@@ -84,6 +86,7 @@ let browseFilters = {
 
 let selectedOpportunityId = null;
 let selectedCourseId = null;
+let selectedChatRoomKey = 'general-youth-lounge';
 let applicationWizard = {
   opportunityId: null,
   draftId: null,
@@ -604,7 +607,7 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 
 function navItems() {
-  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'quest', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'chats', 'quest', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'youth') return ['community', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'employer') return ['community', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'institution') return ['community', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
@@ -621,6 +624,7 @@ function desc() {
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
   if (state.view === 'community') return 'Share achievements, ask questions, support peers and build daily career momentum.';
+  if (state.view === 'chats') return 'Join public youth chat rooms for jobs, CV help, digital skills, campus champions and NYCOM youth support.';
   if (state.view === 'quest') return 'Complete daily missions, earn badges, build streaks and appear on the Jobs4Youth leaderboard.';
   if (state.view === 'polls') return 'Vote on youth priorities and help NYCOM, funders and partners understand what young people need most.';
   if (state.view === 'announcements') return 'Official NYCOM and Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
@@ -1216,6 +1220,19 @@ function ensureCommunityPromptNotification() {
   const exists = (state.notifications || []).some(item => item.id === 'local-community-prompt' || item.notificationType === 'community_prompt');
   if (!exists) state.notifications = [communityPromptNotification(), ...(state.notifications || [])];
 }
+
+function chatQuickCard() {
+  if (!currentUser) return '';
+  return `
+    <div class="card span-12 chat-quick-card">
+      <div class="section-title">
+        <div><div class="kicker">Chat rooms are live</div><h3>Join public rooms for youth conversations</h3><p class="label">Use Chats for quick peer support, jobs and internships, CV help, digital skills, young women in work and NYCOM youth desk conversations.</p></div>
+        <button class="primary" onclick="setView('chats')">Open Chat Rooms</button>
+      </div>
+    </div>
+  `;
+}
+
 function communityPromptCard() {
   return `
     <div class="card span-12 community-prompt-card">
@@ -2021,6 +2038,7 @@ function youthDash() {
       </div>
 
       ${communityPromptCard()}
+      ${chatQuickCard()}
       ${birthdayWishCard()}
       ${safetyCenterCard(false)}
       ${dailyCheckinCard()}
@@ -2943,6 +2961,224 @@ window.refreshCareerQuest = async function() {
   render();
 };
 
+
+function defaultChatRooms() {
+  return [
+    { roomKey: 'general-youth-lounge', name: 'General Youth Lounge', description: 'Daily youth conversations, updates, questions and encouragement.', category: 'General', isActive: true },
+    { roomKey: 'jobs-and-internships', name: 'Jobs and Internships', description: 'Share verified openings, application tips and opportunity alerts.', category: 'Opportunities', isActive: true },
+    { roomKey: 'cv-and-interview-help', name: 'CV and Interview Help', description: 'Ask for CV, cover letter, interview and application support.', category: 'Career Support', isActive: true },
+    { roomKey: 'agriculture-opportunities', name: 'Agriculture Opportunities', description: 'Agriculture, agribusiness, extension and food systems opportunities.', category: 'Sector', isActive: true },
+    { roomKey: 'digital-skills', name: 'Digital Skills', description: 'Data, AI, coding, digital jobs, online learning and tech skills.', category: 'Skills', isActive: true },
+    { roomKey: 'young-women-in-work', name: 'Young Women in Work', description: 'Peer support and opportunities focused on young women in work.', category: 'Inclusion', isActive: true },
+    { roomKey: 'campus-champions', name: 'Campus Champions', description: 'Champion coordination, referrals, onboarding and campus activities.', category: 'Champions', isActive: true },
+    { roomKey: 'nycom-youth-desk', name: 'NYCOM Youth Desk', description: 'Youth questions, announcements and support linked to NYCOM priorities.', category: 'Official', isActive: true }
+  ];
+}
+function getLocalChatMessages() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_chat_messages') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalChatMessages(messages) {
+  try {
+    localStorage.setItem('jobs4youth_chat_messages', JSON.stringify(messages || []));
+  } catch (error) {
+    console.warn('Could not save local chat messages:', error);
+  }
+}
+function activeChatRoom() {
+  const rooms = state.chatRooms && state.chatRooms.length ? state.chatRooms : defaultChatRooms();
+  return rooms.find(room => room.roomKey === selectedChatRoomKey || room.room_key === selectedChatRoomKey) || rooms[0] || defaultChatRooms()[0];
+}
+async function loadChatRoomsFromSupabase() {
+  state.chatRooms = [];
+  state.chatMessages = [];
+  if (!isConfigured || !supabase) {
+    state.chatRooms = defaultChatRooms();
+    state.chatMessages = getLocalChatMessages();
+    return;
+  }
+  try {
+    const { data: rooms, error: roomsError } = await supabase
+      .from('chat_rooms')
+      .select('room_key,name,description,category,is_active,created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+    if (roomsError) throw roomsError;
+    state.chatRooms = (rooms && rooms.length ? rooms : defaultChatRooms()).map(room => ({
+      roomKey: room.room_key || room.roomKey,
+      name: room.name,
+      description: room.description || '',
+      category: room.category || 'General',
+      isActive: room.is_active !== false,
+      createdAt: room.created_at || null
+    }));
+    if (!state.chatRooms.some(room => room.roomKey === selectedChatRoomKey)) selectedChatRoomKey = state.chatRooms[0]?.roomKey || 'general-youth-lounge';
+    await loadChatMessagesFromSupabase(selectedChatRoomKey);
+  } catch (error) {
+    console.warn('Chat rooms load warning, using local fallback:', error);
+    state.chatRooms = defaultChatRooms();
+    state.chatMessages = getLocalChatMessages();
+  }
+}
+async function loadChatMessagesFromSupabase(roomKey = selectedChatRoomKey) {
+  selectedChatRoomKey = roomKey || selectedChatRoomKey || 'general-youth-lounge';
+  if (!isConfigured || !supabase) {
+    state.chatMessages = getLocalChatMessages().filter(message => message.roomKey === selectedChatRoomKey);
+    return;
+  }
+  try {
+    const { data: messages, error: messagesError } = await supabase
+      .from('chat_messages')
+      .select('id,room_key,user_id,message_text,created_at,is_deleted')
+      .eq('room_key', selectedChatRoomKey)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (messagesError) throw messagesError;
+    const userIds = [...new Set((messages || []).map(item => item.user_id).filter(Boolean))];
+    let profileMap = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role, country').in('id', userIds);
+      profileMap = Object.fromEntries((profiles || []).map(profile => [profile.id, profile]));
+    }
+    state.chatMessages = (messages || []).map(item => ({
+      id: item.id,
+      roomKey: item.room_key,
+      userId: item.user_id,
+      authorName: profileMap[item.user_id]?.full_name || 'Jobs4Youth member',
+      authorCountry: profileMap[item.user_id]?.country || '',
+      messageText: item.message_text || '',
+      createdAt: item.created_at,
+      isDeleted: !!item.is_deleted
+    }));
+  } catch (error) {
+    console.warn('Chat messages load warning, using local fallback:', error);
+    state.chatMessages = getLocalChatMessages().filter(message => message.roomKey === selectedChatRoomKey);
+  }
+}
+function chatRoomButton(room) {
+  const key = room.roomKey || room.room_key;
+  const active = key === selectedChatRoomKey;
+  const count = (state.chatMessages || []).filter(message => message.roomKey === key).length;
+  return `
+    <button class="secondary ${active ? 'active' : ''}" style="justify-content:flex-start;text-align:left;" onclick="openChatRoom('${escapeHtml(key)}')">
+      <span><b>${escapeHtml(room.name)}</b><br><span class="label">${escapeHtml(room.category || 'General')} ${count ? ' • ' + count + ' messages loaded' : ''}</span></span>
+    </button>
+  `;
+}
+function chatMessageBubble(message) {
+  const isMine = currentUser && String(message.userId) === String(currentUser.id);
+  return `
+    <div class="chat-message-bubble ${isMine ? 'chat-message-mine' : ''}" style="padding:12px 14px;margin:10px 0;border-radius:18px;${isMine ? 'background:#e7f2dc;margin-left:auto;max-width:78%;' : 'background:#fff;max-width:78%;'}border:1px solid rgba(46,93,39,.15);">
+      <div class="results-meta"><span class="pill ${isMine ? 'pill-verified' : ''}">${escapeHtml(isMine ? 'You' : (message.authorName || 'Member'))}</span>${message.authorCountry ? `<span class="pill">${escapeHtml(message.authorCountry)}</span>` : ''}<span class="pill">${escapeHtml(message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Just now')}</span></div>
+      <p style="margin:8px 0 0;white-space:pre-wrap;">${escapeHtml(message.messageText || '')}</p>
+    </div>
+  `;
+}
+function chatRoomsPage() {
+  const rooms = state.chatRooms && state.chatRooms.length ? state.chatRooms : defaultChatRooms();
+  const room = activeChatRoom();
+  const messages = state.chatMessages || [];
+  return `
+    <div class="grid chat-rooms-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Chat Rooms MVP</div>
+            <h3>Public youth chat rooms</h3>
+            <p class="label">Text-only rooms for daily support, opportunities, CV help, digital skills, campus champions and NYCOM youth conversations. Keep chats respectful and opportunity-focused.</p>
+          </div>
+          <div class="hero-actions"><button class="secondary" onclick="refreshChatRooms()">Refresh chats</button><button class="primary" onclick="setView('community')">Community feed</button></div>
+        </div>
+      </div>
+      <div class="card span-4">
+        <div class="section-title"><h3>Rooms</h3><span class="pill">${rooms.length}</span></div>
+        <div style="display:grid;gap:8px;">${rooms.map(chatRoomButton).join('')}</div>
+        <div class="notice" style="margin-top:14px;"><b>Safety note:</b> avoid sharing passwords, money requests, private documents or suspicious links in public chats.</div>
+      </div>
+      <div class="card span-8">
+        <div class="section-title">
+          <div><div class="kicker">${escapeHtml(room.category || 'General')}</div><h3>${escapeHtml(room.name || 'Chat Room')}</h3><p class="label">${escapeHtml(room.description || 'Public youth discussion room.')}</p></div>
+          <span class="pill pill-verified">${messages.length} message${messages.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="chat-message-list" id="chatMessageList" style="max-height:520px;overflow:auto;padding:8px 4px;background:rgba(248,250,239,.55);border-radius:20px;">
+          ${messages.length ? messages.map(chatMessageBubble).join('') : `<div class="empty-card"><h4>No messages yet</h4><p class="label">Start the conversation in ${escapeHtml(room.name || 'this room')}.</p></div>`}
+        </div>
+        ${currentUser ? `
+          <div class="form" style="margin-top:14px;">
+            <label class="full">Send a message<textarea id="chatMessageInput" maxlength="1000" placeholder="Write a helpful, respectful message..."></textarea></label>
+            <button class="primary full" onclick="sendChatMessage()">Send message</button>
+            <div class="label full" id="chatMessageStatus"></div>
+          </div>
+        ` : `<div class="notice" style="margin-top:14px;"><b>Sign in required:</b> Create an account or sign in to send messages.</div>`}
+      </div>
+    </div>
+  `;
+}
+window.openChatRoom = async function(roomKey) {
+  selectedChatRoomKey = roomKey || 'general-youth-lounge';
+  await loadChatMessagesFromSupabase(selectedChatRoomKey);
+  state.view = 'chats';
+  render();
+  setTimeout(() => {
+    const list = document.getElementById('chatMessageList');
+    if (list) list.scrollTop = list.scrollHeight;
+  }, 80);
+};
+window.refreshChatRooms = async function() {
+  await loadChatRoomsFromSupabase();
+  render();
+};
+window.sendChatMessage = async function() {
+  if (!currentUser) return showUserMessage('Please sign in to send chat messages.');
+  const input = document.getElementById('chatMessageInput');
+  const status = document.getElementById('chatMessageStatus');
+  const messageText = input?.value.trim() || '';
+  if (status) status.textContent = '';
+  if (!messageText) {
+    if (status) status.textContent = 'Please write a message first.';
+    return;
+  }
+  if (messageText.length > 1000) {
+    if (status) status.textContent = 'Please keep messages under 1,000 characters.';
+    return;
+  }
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('chat_messages').insert([{ room_key: selectedChatRoomKey, user_id: currentUser.id, message_text: messageText }]);
+      if (error) throw error;
+      if (input) input.value = '';
+      await loadChatMessagesFromSupabase(selectedChatRoomKey);
+      render();
+      setTimeout(() => {
+        const list = document.getElementById('chatMessageList');
+        if (list) list.scrollTop = list.scrollHeight;
+      }, 80);
+      return;
+    } catch (error) {
+      console.warn('Chat message database warning, using local fallback:', error);
+    }
+  }
+  const allMessages = getLocalChatMessages();
+  allMessages.push({
+    id: `local-chat-${Date.now()}`,
+    roomKey: selectedChatRoomKey,
+    userId: currentUser.id,
+    authorName: state.profile?.name || 'You',
+    authorCountry: state.profile?.country || '',
+    messageText,
+    createdAt: new Date().toISOString(),
+    isDeleted: false
+  });
+  saveLocalChatMessages(allMessages.slice(-500));
+  if (input) input.value = '';
+  state.chatMessages = allMessages.filter(message => message.roomKey === selectedChatRoomKey);
+  render();
+};
+
 function pollsQuickCard() {
   const polls = state.youthPolls || [];
   const unanswered = polls.filter(poll => !poll.myVote).length;
@@ -3464,6 +3700,7 @@ function communityPage() {
 }
 window.refreshCommunityFeed = async function() {
   await loadCommunityFromSupabase();
+  await loadChatRoomsFromSupabase();
   await loadAnnouncementsFromSupabase();
   render();
 };
@@ -4518,6 +4755,7 @@ function render() {
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
   else if (state.view === 'community') c = communityPage();
+  else if (state.view === 'chats') c = chatRoomsPage();
   else if (state.view === 'quest') c = careerQuestPage();
   else if (state.view === 'polls') c = pollsPage();
   else if (state.view === 'announcements') c = announcementsPage();
@@ -4750,6 +4988,7 @@ async function signOut() {
   state = structuredClone(demoState);
   selectedOpportunityId = null;
   selectedCourseId = null;
+  selectedChatRoomKey = 'general-youth-lounge';
   applicationWizard = { opportunityId: null, draftId: null, step: 1, readinessScore: 0, motivationNote: '', screeningAnswers: {}, documentState: { cvReady: false, certificateReady: false, referencesReady: false } };
   browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
   browseFilters.courses = { keyword: '', country: '', region: '', mode: '' };
