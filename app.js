@@ -623,7 +623,131 @@ function desc() {
 }
 
 
+
+const PROFILE_DRAFT_FIELD_IDS = [
+  'profileName',
+  'profileCountry',
+  'profileRegion',
+  'profileEducation',
+  'profileAvailability',
+  'profileGender',
+  'profileExperience',
+  'profileSkills',
+  'profileInterests'
+];
+function profileDraftKey() {
+  return `jobs4youth_profile_draft_${currentUser?.id || 'guest'}`;
+}
+function isYouthProfilePageActive() {
+  return currentUser && state.role === 'youth' && state.view === 'profile';
+}
+function getProfileDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(profileDraftKey()) || 'null');
+  } catch (error) {
+    return null;
+  }
+}
+function hasProfileDraft() {
+  const draft = getProfileDraft();
+  return !!(draft && draft.values && Object.values(draft.values).some(value => String(value || '').trim()));
+}
+function clearProfileDraft() {
+  try {
+    localStorage.removeItem(profileDraftKey());
+  } catch (error) {
+    console.warn('Could not clear profile draft:', error);
+  }
+}
+function collectProfileDraftValues() {
+  return {
+    profileName: document.getElementById('profileName')?.value || '',
+    profileCountry: document.getElementById('profileCountry')?.value || '',
+    profileRegion: document.getElementById('profileRegion')?.value || '',
+    profileEducation: document.getElementById('profileEducation')?.value || '',
+    profileAvailability: document.getElementById('profileAvailability')?.value || '',
+    profileGender: normalizeGender(document.getElementById('profileGender')?.value || ''),
+    profileExperience: document.getElementById('profileExperience')?.value || '',
+    profileSkills: document.getElementById('profileSkills')?.value || '',
+    profileInterests: document.getElementById('profileInterests')?.value || ''
+  };
+}
+function profileDraftHasMeaningfulChanges(values) {
+  return Object.values(values || {}).some(value => String(value || '').trim());
+}
+function persistProfileDraftFromForm(reason = 'autosave') {
+  if (!isYouthProfilePageActive()) return;
+  const values = collectProfileDraftValues();
+  if (!profileDraftHasMeaningfulChanges(values)) return;
+  try {
+    localStorage.setItem(profileDraftKey(), JSON.stringify({
+      userId: currentUser?.id || null,
+      values,
+      savedAt: new Date().toISOString(),
+      reason
+    }));
+    const status = document.getElementById('profileDraftStatus');
+    if (status) status.textContent = `Draft saved automatically at ${new Date().toLocaleTimeString()}.`;
+  } catch (error) {
+    console.warn('Could not save profile draft:', error);
+  }
+}
+function restoreProfileDraftToForm() {
+  if (!isYouthProfilePageActive()) return;
+  const draft = getProfileDraft();
+  if (!draft || !draft.values) return;
+  Object.entries(draft.values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = id === 'profileGender' ? normalizeGender(value) : (value || '');
+  });
+  const status = document.getElementById('profileDraftStatus');
+  if (status) {
+    const savedAt = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : 'recently';
+    status.textContent = `Restored an unsaved profile draft saved ${savedAt}.`;
+  }
+}
+function initialiseProfileDraftAutosave() {
+  if (!isYouthProfilePageActive()) return;
+  restoreProfileDraftToForm();
+  PROFILE_DRAFT_FIELD_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.draftAutosaveAttached === 'true') return;
+    el.dataset.draftAutosaveAttached = 'true';
+    el.addEventListener('input', () => persistProfileDraftFromForm('input'));
+    el.addEventListener('change', () => persistProfileDraftFromForm('change'));
+    el.addEventListener('blur', () => persistProfileDraftFromForm('blur'));
+  });
+}
+function profileDraftRecoveryCard() {
+  const draft = getProfileDraft();
+  if (!draft || !draft.savedAt) return '';
+  return `
+    <div class="card span-12 profile-draft-recovery-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Auto-save enabled</div>
+          <h3>Unsaved profile draft found</h3>
+          <p class="label">Jobs4Youth automatically saved profile edits from ${escapeHtml(new Date(draft.savedAt).toLocaleString())}. The draft has been restored so the user can continue without losing progress.</p>
+        </div>
+        <span class="pill pill-verified">Draft protected</span>
+      </div>
+      <div class="hero-actions">
+        <button class="secondary" onclick="restoreProfileDraftToForm()">Continue editing draft</button>
+        <button class="secondary" onclick="discardProfileDraft()">Discard draft</button>
+      </div>
+      <div class="label" id="profileDraftStatus" style="margin-top:10px;"></div>
+    </div>
+  `;
+}
+window.discardProfileDraft = function() {
+  clearProfileDraft();
+  showUserMessage('Profile draft discarded.');
+  render();
+};
+
 function setView(v) {
+  persistProfileDraftFromForm('navigation');
   state.view = v;
   render();
 }
@@ -2061,7 +2185,8 @@ function profile() {
     ? completionCard('Youth profile readiness', completion, 'Complete your core profile fields including mandatory gender to improve matching and application readiness.', 'Complete youth profile')
     : completionCard('Organisation profile readiness', completion, 'Complete your organisation details to strengthen public trust and moderation readiness.', 'Complete organisation profile');
   const genderNotice = state.role === 'youth' && youthGenderMissing() ? genderRequiredNotice() : '';
-  return `<div class="grid">${genderNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}</div></div>`;
+  const draftNotice = state.role === 'youth' ? profileDraftRecoveryCard() : '';
+  return `<div class="grid">${genderNotice}${draftNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12"><h3>${heading}</h3>${content}<div class="label" id="profileDraftStatus" style="margin-top:10px;"></div></div></div>`;
 }
 
 
@@ -3262,6 +3387,9 @@ function render() {
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
   else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
   document.getElementById('content').innerHTML = c;
+  if (state.role === 'youth' && state.view === 'profile') {
+    setTimeout(() => initialiseProfileDraftAutosave(), 0);
+  }
 }
 
 
@@ -3510,8 +3638,9 @@ window.saveProfile = async function () {
     if (retry.error) return alert(`❌ Failed to save profile: ${retry.error.message}`);
   }
   state.profile = { ...state.profile, name: updates.full_name, country: updates.country, region: updates.region, education: updates.education, availability: updates.availability, experience: updates.experience_level, gender: updates.gender, skills: updates.skills, interests: updates.interests };
+  clearProfileDraft();
   await loadImpactDemographicsFromSupabase();
-  alert('✅ Profile saved successfully!');
+  alert('✅ Profile saved successfully! Draft cleared.');
   render();
 };
 
@@ -3594,5 +3723,18 @@ document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSub
 document.getElementById('btnResetPassword').addEventListener('click', handlePasswordReset);
 document.getElementById('tabLogin').addEventListener('click', () => { authMode = 'login'; updateAuthModal(); });
 document.getElementById('tabSignup').addEventListener('click', () => { authMode = 'signup'; updateAuthModal(); });
+
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) persistProfileDraftFromForm('visibilitychange');
+});
+window.addEventListener('blur', () => persistProfileDraftFromForm('window-blur'));
+window.addEventListener('beforeunload', (event) => {
+  persistProfileDraftFromForm('beforeunload');
+  if (isYouthProfilePageActive() && hasProfileDraft()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
 
 initializeApp();
