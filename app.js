@@ -49,6 +49,8 @@ const demoState = {
   engagementSummary: { totalPoints: 0, currentStreak: 0, todayCheckedIn: false, lastCheckinType: '', level: 'Starter' },
   announcements: [],
   youthPolls: [],
+  chatMessages: [],
+  activeChatRoom: 'general-youth-lounge',
   verificationItems: [],
   verificationDocuments: [],
   notifications: [],
@@ -603,7 +605,7 @@ function signalListCard(titleText, items, renderItem, emptyText = 'No signal dat
 
 
 function navItems() {
-  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
+  if (!currentUser) return ['home', 'opportunities', 'training', 'community', 'chats', 'polls', 'announcements', 'champions', 'universities', 'impact', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'youth') return ['community', 'dashboard', 'opportunities', 'training', 'shortlist', 'polls', 'announcements', 'champions', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'employer') return ['community', 'dashboard', 'post opportunity', 'candidates', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
   if (state.role === 'institution') return ['community', 'dashboard', 'post training', 'courses', 'polls', 'announcements', 'universities', 'impact', 'profile', 'notifications', 'about', 'privacy', 'terms', 'contact'];
@@ -620,6 +622,7 @@ function desc() {
   if (state.view === 'contact') return 'Get in touch for support, partnerships and platform enquiries.';
   if (state.view === 'impact') return 'Track youth reach, young women inclusion, applications, verified opportunities, skills gaps and country intelligence.';
   if (state.view === 'community') return 'Share achievements, ask questions, support peers and build daily career momentum.';
+  if (state.view === 'chats') return 'Join safe public opportunity chat rooms for jobs, CV help, skills, NYCOM updates and peer support.';
   if (state.view === 'polls') return 'Vote on youth priorities and help NYCOM, funders and partners understand what young people need most.';
   if (state.view === 'announcements') return 'Official NYCOM and Jobs4Youth updates, opportunities, youth alerts and platform broadcasts.';
   if (state.view === 'champions') return 'Invite youth, track Champion progress and grow the Jobs4Youth movement.';
@@ -2019,6 +2022,7 @@ function youthDash() {
       </div>
 
       ${communityPromptCard()}
+      ${chatsQuickCard()}
       ${birthdayWishCard()}
       ${safetyCenterCard(false)}
       ${dailyCheckinCard()}
@@ -2519,6 +2523,334 @@ function socialSharingCentre(compact = false) {
 
 
 
+
+
+const CHAT_ROOMS = [
+  { id: 'general-youth-lounge', name: 'General Youth Lounge', description: 'Daily youth conversations, updates and peer support.' },
+  { id: 'jobs-and-internships', name: 'Jobs and Internships', description: 'Share and ask about verified jobs, internships and apprenticeships.' },
+  { id: 'cv-and-interview-help', name: 'CV and Interview Help', description: 'Ask for CV, cover letter and interview preparation support.' },
+  { id: 'training-and-skills', name: 'Training and Skills', description: 'Discuss courses, skills pathways and learning opportunities.' },
+  { id: 'agriculture-opportunities', name: 'Agriculture Opportunities', description: 'Agriculture, agribusiness, food systems and climate-smart jobs.' },
+  { id: 'digital-skills', name: 'Digital Skills', description: 'Data, AI, coding, digital marketing and online work.' },
+  { id: 'young-women-in-work', name: 'Young Women in Work', description: 'Focused space for young women employment, leadership and skills pathways.' },
+  { id: 'campus-champions', name: 'Campus Champions', description: 'Coordinate ambassadors, campus onboarding and referrals.' },
+  { id: 'malawi-youth-opportunities', name: 'Malawi Youth Opportunities', description: 'Opportunities, events and support for youth in Malawi.' },
+  { id: 'nycom-youth-desk', name: 'NYCOM Youth Desk', description: 'Questions and updates linked to NYCOM and youth development support.' }
+];
+
+function getLocalChatReports() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_chat_reports') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalChatReports(items) {
+  try {
+    localStorage.setItem('jobs4youth_chat_reports', JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save local chat reports:', error);
+  }
+}
+function getChatRoomLastSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(`jobs4youth_chat_last_seen_${currentUser?.id || 'guest'}`) || '{}');
+  } catch (error) {
+    return {};
+  }
+}
+function saveChatRoomLastSeen(data) {
+  try {
+    localStorage.setItem(`jobs4youth_chat_last_seen_${currentUser?.id || 'guest'}`, JSON.stringify(data || {}));
+  } catch (error) {
+    console.warn('Could not save chat room last seen:', error);
+  }
+}
+function markChatRoomSeen(roomId = state.activeChatRoom) {
+  if (!roomId) return;
+  const data = getChatRoomLastSeen();
+  data[roomId] = new Date().toISOString();
+  saveChatRoomLastSeen(data);
+}
+function unreadCountForRoom(roomId) {
+  const lastSeen = getChatRoomLastSeen()[roomId];
+  return (state.chatMessages || []).filter(message => {
+    const msgRoom = message.roomId || message.room_id;
+    const msgDate = message.createdAt || message.created_at;
+    return msgRoom === roomId && (!lastSeen || new Date(msgDate) > new Date(lastSeen));
+  }).length;
+}
+function chatRoomMessageCount(roomId) {
+  return (state.chatMessages || []).filter(message => (message.roomId || message.room_id) === roomId).length;
+}
+
+function activeChatRoom() {
+  const id = state.activeChatRoom || 'general-youth-lounge';
+  return CHAT_ROOMS.find(room => room.id === id) || CHAT_ROOMS[0];
+}
+function getLocalChatMessages() {
+  try {
+    return JSON.parse(localStorage.getItem('jobs4youth_chat_messages') || '[]');
+  } catch (error) {
+    return [];
+  }
+}
+function saveLocalChatMessages(items) {
+  try {
+    localStorage.setItem('jobs4youth_chat_messages', JSON.stringify(items || []));
+  } catch (error) {
+    console.warn('Could not save local chat messages:', error);
+  }
+}
+function getRoomMessages(roomId = state.activeChatRoom) {
+  return (state.chatMessages || []).filter(message => message.roomId === roomId || message.room_id === roomId)
+    .sort((a, b) => new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0));
+}
+async function loadChatMessagesFromSupabase() {
+  state.chatMessages = [];
+  if (!isConfigured || !supabase || !currentUser) {
+    state.chatMessages = getLocalChatMessages();
+    return;
+  }
+  try {
+    const { data: messages, error } = await supabase
+      .from('chat_messages')
+      .select('id,room_id,user_id,content,is_hidden,created_at,updated_at')
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: true })
+      .limit(500);
+    if (error) throw error;
+    const userIds = [...new Set((messages || []).map(item => item.user_id).filter(Boolean))];
+    let profileMap = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').in('id', userIds);
+      profileMap = Object.fromEntries((profiles || []).map(profile => [profile.id, profile]));
+    }
+    state.chatMessages = (messages || []).map(item => ({
+      id: item.id,
+      roomId: item.room_id,
+      userId: item.user_id,
+      authorName: profileMap[item.user_id]?.full_name || 'Jobs4Youth member',
+      authorRole: profileMap[item.user_id]?.role || 'member',
+      content: item.content || '',
+      isHidden: !!item.is_hidden,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    }));
+  } catch (error) {
+    console.warn('Chat messages load warning, using local fallback:', error);
+    state.chatMessages = getLocalChatMessages();
+  }
+}
+function chatRoomList() {
+  return `
+    <div class="card span-4 chat-room-list-card">
+      <div class="section-title"><div><h3>Opportunity Chat Rooms</h3><p class="label">Choose a safe public room.</p></div><span class="pill">${CHAT_ROOMS.length} rooms</span></div>
+      <div class="chat-room-list" style="display:grid;gap:8px;">
+        ${CHAT_ROOMS.map(room => {
+          const unread = unreadCountForRoom(room.id);
+          const total = chatRoomMessageCount(room.id);
+          return `
+          <button class="secondary ${activeChatRoom().id === room.id ? 'active' : ''}" onclick="switchChatRoom('${escapeHtml(room.id)}')" style="text-align:left;justify-content:space-between;gap:8px;">
+            <span><b>${escapeHtml(room.name)}</b><br><span class="label">${escapeHtml(room.description)}</span></span>
+            <span class="job-badges"><span class="pill">${total}</span>${unread ? `<span class="pill pill-verified">${unread} new</span>` : ''}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+function chatMessageBubble(message) {
+  const isMine = currentUser && message.userId === currentUser.id;
+  return `
+    <div class="chat-message ${isMine ? 'chat-message-mine' : ''}" style="padding:12px;border:1px solid var(--border);border-radius:18px;margin-bottom:10px;background:${isMine ? '#eef8e8' : '#fff'};">
+      <div class="section-title" style="margin-bottom:4px;">
+        <div class="results-meta"><span class="pill ${message.authorRole === 'admin' ? 'pill-verified' : ''}">${escapeHtml(message.authorName || 'Jobs4Youth member')}</span><span class="pill">${escapeHtml(message.createdAt ? new Date(message.createdAt).toLocaleTimeString() : 'Just now')}</span></div>
+      </div>
+      <p style="margin:0;white-space:pre-wrap;">${escapeHtml(message.content || '')}</p>
+      <div class="hero-actions" style="margin-top:8px;">
+        <button class="secondary" onclick="reportChatMessage('${escapeHtml(message.id)}')">Report</button>
+        ${state.role === 'admin' ? `<button class="secondary" onclick="hideChatMessage('${escapeHtml(message.id)}')">Hide message</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+function chatsPage() {
+  const room = activeChatRoom();
+  const messages = getRoomMessages(room.id);
+  return `
+    <div class="grid chats-page">
+      <div class="card span-12">
+        <div class="section-title">
+          <div>
+            <div class="kicker">Public moderated rooms</div>
+            <h3>Jobs4Youth Chats</h3>
+            <p class="label">Ask questions, share opportunities, celebrate progress and support other youth. Keep conversations respectful, career-focused and safe.</p>
+          </div>
+          <div class="hero-actions"><button class="secondary" onclick="refreshChatRoom()">Refresh room</button><button class="primary" onclick="setView('community')">Open Community Feed</button></div>
+        </div>
+        <div class="notice"><b>Safety note:</b> Do not share passwords, payment requests, private documents, or suspicious links. Use the Report button on any unsafe or suspicious message. Admins can hide messages.</div>
+      </div>
+      ${chatModerationSummaryCard()}
+      ${chatRoomList()}
+      <div class="card span-8 chat-panel-card">
+        <div class="section-title">
+          <div><h3>${escapeHtml(room.name)}</h3><p class="label">${escapeHtml(room.description)}</p></div>
+          <span class="pill pill-verified">${messages.length} message${messages.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="chat-messages" id="chatMessagesBox" style="max-height:520px;overflow:auto;padding-right:6px;margin-top:10px;">
+          ${messages.length ? messages.map(chatMessageBubble).join('') : `<div class="empty-card"><h4>No messages yet</h4><p class="label">Be the first to start a useful conversation in this room.</p></div>`}
+        </div>
+        ${currentUser ? `
+          <div class="form" style="margin-top:14px;">
+            <label class="full">Send a message<textarea id="chatMessageInput" maxlength="800" placeholder="Write a short, respectful, career-focused message."></textarea></label>
+            <button class="primary full" onclick="sendChatMessage()">Send message</button>
+            <div class="label full" id="chatMessageStatus"></div>
+          </div>
+        ` : `
+          <div class="empty-card"><h4>Sign in to chat</h4><p class="label">Create an account or sign in to post messages in chat rooms.</p><button class="primary" onclick="openSignup()">Create account</button></div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+window.reportChatMessage = async function(messageId) {
+  if (!currentUser) return showUserMessage('Please sign in to report a message.');
+  const message = (state.chatMessages || []).find(item => String(item.id) === String(messageId));
+  if (!message) return showUserMessage('Message not found.');
+  const reason = prompt('Why are you reporting this message? Example: scam, harassment, suspicious link, inappropriate content, personal information request.');
+  if (!reason || !String(reason).trim()) return;
+  const report = {
+    id: `local-chat-report-${Date.now()}`,
+    messageId: message.id,
+    roomId: message.roomId || message.room_id,
+    reporterId: currentUser.id,
+    reason: String(reason).trim(),
+    createdAt: new Date().toISOString(),
+    status: 'Submitted'
+  };
+  if (isConfigured && supabase && !String(messageId).startsWith('local-chat-')) {
+    try {
+      const { error } = await supabase.from('chat_message_reports').insert([{
+        message_id: message.id,
+        room_id: message.roomId || message.room_id,
+        reporter_id: currentUser.id,
+        reason: report.reason,
+        report_status: 'Submitted'
+      }]);
+      if (error) throw error;
+      showUserMessage('Thank you. Your chat report has been submitted for moderation review.');
+      return;
+    } catch (error) {
+      console.warn('Chat report database warning, using local fallback:', error);
+    }
+  }
+  const reports = getLocalChatReports();
+  reports.unshift(report);
+  saveLocalChatReports(reports.slice(0, 100));
+  showUserMessage('Thank you. Your chat report has been saved locally.');
+};
+window.hideChatMessage = async function(messageId) {
+  if (!currentUser || state.role !== 'admin') return showUserMessage('Only admins can hide chat messages.');
+  if (!confirm('Hide this chat message from public view?')) return;
+  if (isConfigured && supabase && !String(messageId).startsWith('local-chat-')) {
+    try {
+      const { error } = await supabase.from('chat_messages').update({ is_hidden: true }).eq('id', messageId);
+      if (error) throw error;
+      await loadChatMessagesFromSupabase();
+      render();
+      showUserMessage('Message hidden.');
+      return;
+    } catch (error) {
+      console.warn('Chat hide database warning:', error);
+      return showUserMessage(`Could not hide message: ${error.message || error}`);
+    }
+  }
+  const local = getLocalChatMessages().filter(item => String(item.id) !== String(messageId));
+  saveLocalChatMessages(local);
+  state.chatMessages = local;
+  render();
+};
+function chatModerationSummaryCard() {
+  if (state.role !== 'admin') return '';
+  const reports = getLocalChatReports();
+  return `
+    <div class="card span-12">
+      <div class="section-title"><div><h3>Chat moderation summary</h3><p class="label">Local reports from this browser are shown here. Supabase reports can be reviewed directly in the chat_message_reports table for now.</p></div><span class="pill">${reports.length} local report${reports.length === 1 ? '' : 's'}</span></div>
+      ${reports.length ? reports.slice(0, 5).map(report => `<div class="support-admin-note" style="margin-top:8px;"><b>${escapeHtml(report.roomId || 'room')}:</b> ${escapeHtml(report.reason || '')}</div>`).join('') : `<p class="label">No local chat reports yet.</p>`}
+    </div>
+  `;
+}
+
+window.switchChatRoom = async function(roomId) {
+  const room = CHAT_ROOMS.find(item => item.id === roomId);
+  if (!room) return showUserMessage('Chat room not found.');
+  state.activeChatRoom = roomId;
+  await loadChatMessagesFromSupabase();
+  render();
+  setTimeout(() => {
+    const box = document.getElementById('chatMessagesBox');
+    if (box) box.scrollTop = box.scrollHeight;
+  }, 80);
+};
+window.refreshChatRoom = async function() {
+  await loadChatMessagesFromSupabase();
+  render();
+  setTimeout(() => {
+    const box = document.getElementById('chatMessagesBox');
+    if (box) box.scrollTop = box.scrollHeight;
+  }, 80);
+};
+window.sendChatMessage = async function() {
+  if (!currentUser) return showUserMessage('Please sign in to send messages.');
+  const room = activeChatRoom();
+  const input = document.getElementById('chatMessageInput');
+  const status = document.getElementById('chatMessageStatus');
+  const content = input?.value.trim() || '';
+  if (status) status.textContent = '';
+  if (!content) {
+    if (status) status.textContent = 'Please write a message first.';
+    return;
+  }
+  if (content.length > 800) {
+    if (status) status.textContent = 'Please keep messages under 800 characters.';
+    return;
+  }
+  if (isConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('chat_messages').insert([{ room_id: room.id, user_id: currentUser.id, content, is_hidden: false }]);
+      if (error) throw error;
+      if (input) input.value = '';
+      await loadChatMessagesFromSupabase();
+      render();
+      setTimeout(() => {
+        const box = document.getElementById('chatMessagesBox');
+        if (box) box.scrollTop = box.scrollHeight;
+      }, 80);
+      return;
+    } catch (error) {
+      console.warn('Chat message database warning, using local fallback:', error);
+    }
+  }
+  const local = getLocalChatMessages();
+  local.push({ id: `local-chat-${Date.now()}`, roomId: room.id, userId: currentUser.id, authorName: state.profile?.name || 'Jobs4Youth member', authorRole: state.role, content, isHidden: false, createdAt: new Date().toISOString() });
+  saveLocalChatMessages(local.slice(-500));
+  state.chatMessages = local.slice(-500);
+  if (input) input.value = '';
+  if (status) status.textContent = 'Message saved locally. Create the Supabase chat table to sync across users.';
+  render();
+};
+function chatsQuickCard() {
+  return `
+    <div class="card span-12 chats-quick-card">
+      <div class="section-title">
+        <div><div class="kicker">Live peer support</div><h3>Join Jobs4Youth chat rooms</h3><p class="label">Use public rooms for jobs, internships, CV help, skills, agriculture opportunities, digital skills, young women in work and NYCOM youth support.</p></div>
+        <button class="primary" onclick="setView('chats')">Open Chats</button>
+      </div>
+    </div>
+  `;
+}
 
 function getLocalYouthPolls() {
   try {
@@ -3321,6 +3653,7 @@ function communityPage() {
 }
 window.refreshCommunityFeed = async function() {
   await loadCommunityFromSupabase();
+  await loadChatMessagesFromSupabase();
   await loadAnnouncementsFromSupabase();
   render();
 };
@@ -3512,7 +3845,7 @@ function launchToolkit() {
         </div>
       </div>
       <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
-      <div class="card span-6"><h3>Concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
       <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
     </div>
   `;
@@ -3615,7 +3948,7 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
       ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
       ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
@@ -4375,6 +4708,7 @@ function render() {
   else if (state.view === 'terms') c = terms();
   else if (state.view === 'contact') c = contact();
   else if (state.view === 'community') c = communityPage();
+  else if (state.view === 'chats') c = chatsPage();
   else if (state.view === 'polls') c = pollsPage();
   else if (state.view === 'announcements') c = announcementsPage();
   else if (state.view === 'impact') c = impactEvidence();
@@ -4389,6 +4723,13 @@ function render() {
   document.getElementById('content').innerHTML = c;
   if (state.role === 'youth' && state.view === 'profile') {
     setTimeout(() => initialiseProfileDraftAutosave(), 0);
+  }
+  if (state.view === 'chats') {
+    markChatRoomSeen(state.activeChatRoom);
+    setTimeout(() => {
+      const box = document.getElementById('chatMessagesBox');
+      if (box) box.scrollTop = box.scrollHeight;
+    }, 80);
   }
 }
 
