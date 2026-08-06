@@ -1266,6 +1266,17 @@ window.markNotificationRead = async function(notificationId) {
 
 
 
+
+function mobileBottomNav(){
+ if(!currentUser) return '';
+ return `<div class="mobile-bottom-nav" style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #ddd;display:flex;justify-content:space-around;padding:10px 4px;">
+<button onclick="setView('community')">Feed</button>
+<button onclick="setView('chats')">Chats</button>
+<button onclick="setView('quest')">Quest</button>
+<button onclick="setView('opportunities')">Jobs</button>
+<button onclick="setView('profile')">Me</button>
+</div>`;}
+
 function renderShell() {
   document.getElementById('nav').innerHTML = navItems().map(v => {
     const unread = currentUser && v === 'notifications' ? latestUnreadCount() : 0;
@@ -4768,7 +4779,7 @@ function render() {
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
   else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
-  document.getElementById('content').innerHTML = c;
+  document.getElementById('content').innerHTML = c + mobileBottomNav();
   if (state.role === 'youth' && state.view === 'profile') {
     setTimeout(() => initialiseProfileDraftAutosave(), 0);
   }
@@ -4976,7 +4987,7 @@ async function handleAuthSubmit() {
   await loadNotificationsFromSupabase();
   await loadCommunityFromSupabase();
   closeAuthModal();
-  state.view = 'dashboard';
+  state.view = currentUser && state.role === 'youth' ? 'community' : 'dashboard';
   alert(authMode === 'signup' ? 'Account created successfully.' : 'Signed in successfully.');
   render();
 }
@@ -5060,7 +5071,7 @@ async function initializeApp() {
       currentUser = sessionData.session.user;
       const profile = await ensureProfile(currentUser);
       syncProfileToState(profile);
-      state.view = 'dashboard';
+      state.view = currentUser && state.role === 'youth' ? 'community' : 'dashboard';
       if (hasPasswordRecoveryParams()) {
         setTimeout(() => completePasswordRecovery(), 100);
       }
@@ -5085,7 +5096,7 @@ async function initializeApp() {
       if (currentUser) {
         const profile = await ensureProfile(currentUser);
         syncProfileToState(profile);
-        state.view = 'dashboard';
+        state.view = currentUser && state.role === 'youth' ? 'community' : 'dashboard';
       } else {
         state = structuredClone(demoState);
         browseFilters.jobs = { keyword: '', country: '', region: '', type: '', education: '', experience: '' };
