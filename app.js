@@ -50,6 +50,9 @@ const demoState = {
   announcements: [],
   youthPolls: [],
   questLeaderboard: [],
+  chatUnreadCount: 0,
+  communityUnreadCount: 0,
+  questUnreadCount: 0,
   chatRooms: [],
   chatMessages: [],
   verificationItems: [],
@@ -87,6 +90,7 @@ let browseFilters = {
 let selectedOpportunityId = null;
 let selectedCourseId = null;
 let selectedChatRoomKey = 'general-youth-lounge';
+let chatSubscription=null;
 let applicationWizard = {
   opportunityId: null,
   draftId: null,
@@ -1280,7 +1284,7 @@ function mobileBottomNav(){
 function renderShell() {
   document.getElementById('nav').innerHTML = navItems().map(v => {
     const unread = currentUser && v === 'notifications' ? latestUnreadCount() : 0;
-    return `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}${unread ? ` <span class="nav-badge">${unread}</span>` : ''}</button>`;
+    const extra=v==='chats'?state.chatUnreadCount:(v==='community'?state.communityUnreadCount:(v==='quest'?state.questUnreadCount:0)); return `<button class="${state.view === v ? 'active' : ''}" onclick="setView('${v}')">${title(v)}${(unread||extra)?` <span class="nav-badge">${(unread||0)+(extra||0)}</span>`:''}</button>`;
   }).join('');
   const roles = currentUser ? [state.role] : ['youth', 'employer', 'institution', 'admin'];
   document.getElementById('roleSwitch').innerHTML = roles.map(r => `<button class="${state.role === r ? 'active' : ''}" onclick="setRole('${r}')">${title(r)}</button>`).join('');
@@ -2864,7 +2868,7 @@ function questCompletionStats() {
   const completed = missions.filter(m => m.complete).length;
   const availablePoints = missions.reduce((sum, m) => sum + Number(m.points || 0), 0);
   const earnedToday = missions.filter(m => m.complete).reduce((sum, m) => sum + Number(m.points || 0), 0);
-  return { missions, completed, total: missions.length, availablePoints, earnedToday };
+  state.questUnreadCount=Math.max(0,missions.length-completed); return { missions, completed, total: missions.length, availablePoints, earnedToday };
 }
 async function loadCareerQuestLeaderboardFromSupabase() {
   state.questLeaderboard = [];
@@ -2972,6 +2976,17 @@ window.refreshCareerQuest = async function() {
   render();
 };
 
+
+
+function subscribeToChatRoom(){
+ if(!supabase||!selectedChatRoomKey) return;
+ try{ if(chatSubscription) supabase.removeChannel(chatSubscription);}catch(e){}
+ chatSubscription=supabase.channel(`room-${selectedChatRoomKey}`).on('postgres_changes',{event:'*',schema:'public',table:'chat_messages'},async(payload)=>{
+   if(state.view!=='chats') state.chatUnreadCount=(state.chatUnreadCount||0)+1;
+   await loadChatMessagesFromSupabase(selectedChatRoomKey);
+   render();
+ }).subscribe();
+}
 
 function defaultChatRooms() {
   return [
@@ -3132,7 +3147,7 @@ function chatRoomsPage() {
 window.openChatRoom = async function(roomKey) {
   selectedChatRoomKey = roomKey || 'general-youth-lounge';
   await loadChatMessagesFromSupabase(selectedChatRoomKey);
-  state.view = 'chats';
+  state.chatUnreadCount=0; subscribeToChatRoom(); state.view = 'chats';
   render();
   setTimeout(() => {
     const list = document.getElementById('chatMessageList');
@@ -3631,7 +3646,7 @@ async function loadCommunityFromSupabase() {
         (commentProfiles || []).forEach(p => { profileMap[p.id] = p; });
       }
     }
-    state.communityPosts = (posts || []).map(post => ({
+    state.communityUnreadCount=Math.min((posts||[]).length,99); state.communityPosts = (posts || []).map(post => ({
       id: post.id,
       userId: post.user_id,
       authorName: profileMap[post.user_id]?.full_name || 'Jobs4Youth member',
@@ -4754,6 +4769,23 @@ function bar(label, n) {
 }
 
 
+
+
+function floatingPostButton(){
+ if(!currentUser||state.role!=='youth') return '';
+ return `<button onclick="setView('community')" style="position:fixed;bottom:90px;right:18px;width:64px;height:64px;border-radius:50%;border:none;background:#2e5d27;color:#fff;font-size:34px;z-index:10001;box-shadow:0 8px 24px rgba(0,0,0,.25);">+</button>`;
+}
+
+function mobileQuickActionsBar(){
+ if(!currentUser) return '';
+ return `<div class="mobile-quick-actions" style="position:sticky;top:0;z-index:1000;background:#fff;padding:8px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;overflow:auto;">
+<button class="secondary" onclick="setView('community')">🏠 Feed</button>
+<button class="secondary" onclick="setView('chats')">💬 Chats</button>
+<button class="secondary" onclick="setView('quest')">🎯 Quest</button>
+<button class="secondary" onclick="setView('opportunities')">💼 Jobs</button>
+<button class="secondary" onclick="setView('profile')">👤 Profile</button>
+</div>`;}
+
 function render() {
   renderShell();
   let c = '';
@@ -4779,7 +4811,7 @@ function render() {
   else if (state.role === 'employer') c = state.view === 'dashboard' ? employerDash() : state.view === 'post opportunity' ? postOpportunity() : state.view === 'candidates' ? candidates() : profile();
   else if (state.role === 'institution') c = state.view === 'dashboard' ? institutionDash() : state.view === 'post training' ? postTraining() : state.view === 'courses' ? courses() : profile();
   else if (state.role === 'admin') c = state.view === 'dashboard' ? adminDash() : state.view === 'verification' ? verification() : state.view === 'insights' ? insights() : state.view === 'about' ? about() : state.view === 'privacy' ? privacy() : state.view === 'terms' ? terms() : state.view === 'notifications' ? notificationsCenter() : contact();
-  document.getElementById('content').innerHTML = c + mobileBottomNav();
+  document.getElementById('content').innerHTML = mobileQuickActionsBar() + c + mobileBottomNav() + floatingPostButton();
   if (state.role === 'youth' && state.view === 'profile') {
     setTimeout(() => initialiseProfileDraftAutosave(), 0);
   }
