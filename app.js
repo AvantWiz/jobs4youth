@@ -808,7 +808,8 @@ window.scrollToProfileGender = function() {
   state.view = 'profile';
   render();
   setTimeout(() => {
-    const genderField = document.getElementById('profileGender');
+    const requiredIds = ['profileInterests','profileEducation','profileSkills','profileCountry','profileRegion','profileGender','profileAvailability'];
+    const genderField = requiredIds.map(id => document.getElementById(id)).find(el => el && !String(el.value || '').trim()) || document.getElementById('profileGender');
     const profileForm = genderField?.closest('.form') || document.getElementById('profileName')?.closest('.form');
     const target = genderField || profileForm || document.getElementById('content');
     if (target) {
@@ -825,6 +826,40 @@ window.scrollToProfileGender = function() {
     }
   }, 120);
 };
+
+
+function youthRequiredProfileMissingFields(profile = state.profile) {
+  const items = [
+    ['career goal', profile.interests || profile.careerGoal || ''],
+    ['education', profile.education || ''],
+    ['skills', profile.skills || ''],
+    ['country', profile.country || ''],
+    ['region', profile.region || ''],
+    ['gender', normalizeGender(profile.gender) || ''],
+    ['availability', profile.availability || '']
+  ];
+  return items.filter(([_, value]) => !String(value || '').trim()).map(([label]) => label);
+}
+function youthRequiredProfileComplete(profile = state.profile) {
+  return youthRequiredProfileMissingFields(profile).length === 0;
+}
+function youthRequiredProfileNotice() {
+  const missing = youthRequiredProfileMissingFields();
+  if (!missing.length) return '';
+  return `
+    <div class="card span-12 gender-required-card">
+      <div class="section-title">
+        <div>
+          <div class="kicker">Mandatory youth profile fields</div>
+          <h3>Complete your Career Passport before continuing</h3>
+          <p class="label">To match youth with opportunities and generate reliable youth employment insights, these fields are required: ${escapeHtml(missing.join(', '))}.</p>
+        </div>
+        <span class="pill pill-verified">Required</span>
+      </div>
+      <button class="primary" onclick="scrollToProfileGender()">Complete required fields now</button>
+    </div>
+  `;
+}
 
 function genderRequiredNotice() {
   return `
@@ -1423,11 +1458,11 @@ async function requireYouthUser() {
     showUserMessage('Only youth accounts can use this youth application workflow.');
     return null;
   }
-  if (!normalizeGender(profile.gender)) {
-    syncProfileToState(profile);
+  syncProfileToState(profile);
+  if (!youthRequiredProfileComplete(state.profile)) {
     state.view = 'profile';
     render();
-    showUserMessage('Please complete the mandatory Gender field before using youth features. This supports Young Women Reached reporting.');
+    showUserMessage('Please complete mandatory youth fields before using youth features: Career Goal, Education, Skills, Country, Region, Gender and Availability.');
     return null;
   }
   return { user, profile };
@@ -2262,13 +2297,13 @@ function youthProfileForm() {
     <div class="form">
       <label>Name<input id="profileName" value="${escapeHtml(state.profile.name || '')}"/></label>
       ${actionSelect('Country','profileCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-      <label>Region / City<input id="profileRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
+      <label>Region / City *<input id="profileRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
       ${actionSelect('Education','profileEducation', OPTION_SETS.educationLevels, state.profile.education, 'Choose education')}
-      ${actionSelect('Availability','profileAvailability', OPTION_SETS.availability, state.profile.availability, 'Choose availability')}
+      ${actionSelect('Availability *','profileAvailability', OPTION_SETS.availability, state.profile.availability, 'Choose availability')}
       ${actionSelect('Gender *','profileGender', OPTION_SETS.genderOptions, normalizeGender(state.profile.gender), 'Choose gender')}
       <label>Date of birth <span class="label">(for birthday wishes)</span><input id="profileDateOfBirth" type="date" value="${escapeHtml(state.profile.dateOfBirth || '')}"/></label>
       ${actionSelect('Experience level','profileExperience', OPTION_SETS.experienceLevels, state.profile.experience, 'Choose experience')}
-      <label class="full">Skills<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
+      <label class="full">Skills *<textarea id="profileSkills">${escapeHtml(state.profile.skills || '')}</textarea></label>
       <label class="full">Interests<textarea id="profileInterests">${escapeHtml(state.profile.interests || '')}</textarea></label>
       <button class="primary full" onclick="saveProfile()">Save profile</button>
     </div>
@@ -2303,7 +2338,7 @@ function organizationProfileForm(label) {
       <label>${escapeHtml(label)}<input id="orgName" value="${escapeHtml(state.profile.organizationName || '')}"/></label>
       ${actionSelect('Sector','orgSector', OPTION_SETS.sectors, state.profile.sector, 'Choose sector')}
       ${actionSelect('Country','orgCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-      <label>Region / City<input id="orgRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
+      <label>Region / City *<input id="orgRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
       <div class="full verification-panel ${state.profile.verified ? 'verification-panel-verified' : 'verification-panel-pending'}">
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">${statusBadge(verificationState)} ${state.profile.verified ? '<span class="pill pill-verified">Public trust enabled</span>' : '<span class="pill">Review in progress</span>'}</div>
         <div class="label" style="margin-top:8px;">${escapeHtml(verificationText)}</div>
@@ -2348,7 +2383,7 @@ function profile() {
   const guidance = state.role === 'youth'
     ? completionCard('Youth profile readiness', completion, 'Complete your core profile fields including mandatory gender to improve matching and application readiness.', 'Complete youth profile')
     : completionCard('Organisation profile readiness', completion, 'Complete your organisation details to strengthen public trust and moderation readiness.', 'Complete organisation profile');
-  const genderNotice = state.role === 'youth' && youthGenderMissing() ? genderRequiredNotice() : '';
+  const genderNotice = state.role === 'youth' ? youthRequiredProfileNotice() : '';
   const draftNotice = state.role === 'youth' ? profileDraftRecoveryCard() : '';
   return `<div class="grid">${genderNotice}${draftNotice}<div class="card span-12">${onboardingPanel()}</div><div class="card span-12">${guidance}</div><div class="card span-12" id="profileEditFormCard"><h3>${heading}</h3>${content}<div class="label" id="profileDraftStatus" style="margin-top:10px;"></div></div></div>`;
 }
@@ -4247,7 +4282,7 @@ function postOpportunity() {
         <label class="full">Opportunity title *<input id="oppTitle" placeholder="e.g. Agribusiness Internship Officer" required /></label>
         <label>Organization name *<input id="oppOrg" placeholder="e.g. Green Harvest Ltd" value="${escapeHtml(state.profile.organizationName || '')}" required /></label>
         ${actionSelect('Country *','oppCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-        <label>Region / City *<input id="oppRegion" placeholder="e.g. Blantyre" value="${escapeHtml(state.profile.region || '')}" required /></label>
+        <label>Region / City * *<input id="oppRegion" placeholder="e.g. Blantyre" value="${escapeHtml(state.profile.region || '')}" required /></label>
         ${actionSelect('Opportunity type *','oppType', OPTION_SETS.opportunityTypes, '', 'Choose opportunity type')}
         ${actionSelect('Education requirement *','oppEducation', OPTION_SETS.educationLevels, '', 'Choose education requirement')}
         ${actionSelect('Experience requirement *','oppExperience', OPTION_SETS.experienceLevels, '', 'Choose experience requirement')}
@@ -4400,8 +4435,8 @@ function postTraining() {
         ${actionSelect('Course type','courseType', OPTION_SETS.courseTypes, '', 'Choose course type')}
         <label>Duration<input id="courseDuration" placeholder="e.g. 6 weeks" /></label>
         ${actionSelect('Country','courseCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-        <label>Region / City<input id="courseRegion" placeholder="e.g. Nairobi / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
-        <label class="full">Skills covered (comma separated)<input id="courseSkills" placeholder="e.g. agronomy, records, mobile money" /></label>
+        <label>Region / City *<input id="courseRegion" placeholder="e.g. Nairobi / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
+        <label class="full">Skills * covered (comma separated)<input id="courseSkills" placeholder="e.g. agronomy, records, mobile money" /></label>
         <button class="primary full" onclick="submitCourse()">Post training</button>
         <div class="label full" id="courseMessage"></div>
       </div>
@@ -4859,7 +4894,7 @@ function mobileQuickActionsBar(){
 function render() {
   renderShell();
   let c = '';
-  if (currentUser && state.role === 'youth' && youthGenderMissing() && !['profile','about','privacy','terms','contact','notifications'].includes(state.view)) {
+  if (currentUser && state.role === 'youth' && !youthRequiredProfileComplete() && !['profile','about','privacy','terms','contact','notifications'].includes(state.view)) {
     state.view = 'profile';
   }
   if (state.view === 'home') c = home();
@@ -5116,7 +5151,17 @@ window.saveProfile = async function () {
   const user = userData?.user;
   if (userError || !user) return alert('Please sign in first.');
   const selectedGender = normalizeGender(document.getElementById('profileGender')?.value || '');
-  if (!selectedGender) return alert('Please select Gender. This is mandatory for Young Women Reached reporting.');
+  const requiredValues = {
+    'Career Goal': document.getElementById('profileInterests')?.value || '',
+    'Education': document.getElementById('profileEducation')?.value || '',
+    'Skills': document.getElementById('profileSkills')?.value || '',
+    'Country': document.getElementById('profileCountry')?.value || '',
+    'Region': document.getElementById('profileRegion')?.value || '',
+    'Gender': selectedGender,
+    'Availability': document.getElementById('profileAvailability')?.value || ''
+  };
+  const missingRequired = Object.entries(requiredValues).filter(([_, value]) => !String(value || '').trim()).map(([label]) => label);
+  if (missingRequired.length) return alert(`Please complete these mandatory fields before saving: ${missingRequired.join(', ')}`);
   const updates = {
     full_name: document.getElementById('profileName')?.value || '',
     country: document.getElementById('profileCountry')?.value || '',
