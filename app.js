@@ -4217,6 +4217,43 @@ function employerDash() {
   return `
     <div class="grid employer-command-centre">
       <div class="card span-12 employer-hero-card">
+      <div class="card span-12">
+  <div class="section-title">
+    <div>
+      <div class="kicker">Growing Talent Network</div>
+      <h3>Access Malawi's Growing Youth Talent Network</h3>
+      <p class="label">
+        Connect with 280+ registered young people actively exploring
+        jobs, internships, apprenticeships and skills pathways.
+      </p>
+    </div>
+    <button class="primary" onclick="setView('post opportunity')">
+      Post Opportunity
+    </button>
+  </div>
+
+  <div class="trust-grid">
+    <div class="trust-card">
+      <h4>Post Opportunities</h4>
+      <p class="label">Reach active youth quickly.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Review Applications</h4>
+      <p class="label">Structured candidate pipelines.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Shortlist Candidates</h4>
+      <p class="label">Save top talent for follow-up.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Discover Talent</h4>
+      <p class="label">Find youth aligned to your needs.</p>
+    </div>
+  </div>
+</div>
         <div class="section-title">
           <div>
             <div class="kicker">Employer hiring cockpit</div>
@@ -4414,6 +4451,42 @@ function institutionDash() {
   const completion = organisationProfileCompletion();
   return `
     ${onboardingPanel()}
+    <div class="card span-12">
+  <div class="section-title">
+    <div>
+      <div class="kicker">Training Provider Growth</div>
+      <h3>Reach Motivated Young People</h3>
+      <p class="label">
+        Promote learning pathways and skills development opportunities.
+      </p>
+    </div>
+    <button class="primary" onclick="setView('post training')">
+      Post Course
+    </button>
+  </div>
+
+  <div class="trust-grid">
+    <div class="trust-card">
+      <h4>Promote Courses</h4>
+      <p class="label">Increase visibility.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Scholarships</h4>
+      <p class="label">Reach more applicants.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Short Courses</h4>
+      <p class="label">Upskill youth faster.</p>
+    </div>
+
+    <div class="trust-card">
+      <h4>Certifications</h4>
+      <p class="label">Support career growth.</p>
+    </div>
+  </div>
+</div>
     ${completionCard('Institution profile readiness', completion, 'Complete your provider information to strengthen learner confidence and training discoverability.', 'Complete institution profile')}
     ${metrics()}
     <div class="grid" style="margin-top:18px">
