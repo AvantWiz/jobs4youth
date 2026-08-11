@@ -1079,10 +1079,34 @@ async function loadVerificationQueueFromSupabase() {
   state.verificationItems = [];
   if (!isConfigured || !currentUser || state.role !== 'admin') return;
   const { data: queue, error } = await supabase.from('verification_queue').select('*').order('created_at', { ascending: false });
-  if (error) { console.error('Error loading verification queue:', error); return; }
-  const profileIds = [...new Set((queue || []).map(q => q.profile_id).filter(Boolean))];
-  const oppIds = [...new Set((queue || []).filter(q => q.item_type === 'opportunity' && q.item_id).map(q => q.item_id))];
-  const courseIds = [...new Set((queue || []).filter(q => q.item_type === 'course' && q.item_id).map(q => q.item_id))];
+  if (error) { console.error('Error loading verification queue:', error); }
+  const safeQueue = error ? [] : (queue || []);
+
+  const { data: pendingOpps, error: oppPendingError } = await supabase
+    .from('opportunities')
+    .select('*')
+    .eq('status', 'Pending')
+    .order('created_at', { ascending: false });
+  if (oppPendingError) console.error('Error loading pending opportunities:', oppPendingError);
+
+  const queuedOppIds = new Set(safeQueue.filter(q => q.item_type === 'opportunity' && q.item_id).map(q => String(q.item_id)));
+  const syntheticOppQueue = (pendingOpps || [])
+    .filter(o => !queuedOppIds.has(String(o.id)))
+    .map(o => ({
+      id: `opportunity:${o.id}`,
+      item_type: 'opportunity',
+      item_id: o.id,
+      profile_id: o.posted_by || null,
+      review_status: 'Pending',
+      review_notes: '',
+      created_at: o.created_at || new Date().toISOString(),
+      synthetic: true
+    }));
+  const mergedQueue = [...syntheticOppQueue, ...safeQueue];
+
+  const profileIds = [...new Set(mergedQueue.map(q => q.profile_id).filter(Boolean))];
+  const oppIds = [...new Set(mergedQueue.filter(q => q.item_type === 'opportunity' && q.item_id).map(q => q.item_id))];
+  const courseIds = [...new Set(mergedQueue.filter(q => q.item_type === 'course' && q.item_id).map(q => q.item_id))];
   let profileMap = {}, oppMap = {}, courseMap = {}, documentMap = {};
   if (profileIds.length) {
     const { data } = await supabase.from('profiles').select('id, full_name, email, role, organization_name, country, region, verified').in('id', profileIds);
@@ -1117,14 +1141,15 @@ async function loadVerificationQueueFromSupabase() {
     const { data } = await supabase.from('courses').select('*').in('id', courseIds);
     courseMap = Object.fromEntries((data || []).map(c => [c.id, c]));
   }
-  state.verificationItems = (queue || []).map(item => ({
+  state.verificationItems = mergedQueue.map(item => ({
     id: item.id,
+    synthetic: !!item.synthetic,
     itemType: item.item_type,
     itemId: item.item_id,
     profileId: item.profile_id,
     reviewStatus: item.review_status,
     reviewNotes: item.review_notes || '',
-    ownerName: profileMap[item.profile_id]?.full_name || profileMap[item.profile_id]?.email || 'Unknown',
+    ownerName: profileMap[item.profile_id]?.full_name || profileMap[item.profile_id]?.email || (item.profile_id ? 'Unknown' : 'Not linked to employer'),
     ownerEmail: profileMap[item.profile_id]?.email || '',
     ownerOrg: profileMap[item.profile_id]?.organization_name || '',
     ownerCountry: profileMap[item.profile_id]?.country || '',
@@ -1134,7 +1159,6 @@ async function loadVerificationQueueFromSupabase() {
     course: item.item_type === 'course' ? courseMap[item.item_id] || null : null
   }));
 }
-
 
 async function loadVerificationDocumentsFromSupabase() {
   state.verificationDocuments = [];
@@ -3918,7 +3942,7 @@ function launchToolkit() {
         </div>
       </div>
       <div class="card span-6"><h3>Partner and funder pitch</h3><p>Jobs4Youth is Africa's digital youth employment infrastructure, connecting young people to verified work, skills pathways and labour-market intelligence.</p><div class="notice"><b>30-second pitch:</b> Jobs4Youth helps youth build Career Passports, assess readiness through CareerGPS, identify skills gaps, access verified opportunities and progress toward meaningful work while generating labour-market intelligence for employers, institutions and funders.</div></div>
-      <div class="card span-6"><h3>Mastercard-style concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
+      <div class="card span-6"><h3>Funder-ready concept note summary</h3><p><b>Title:</b> Accelerating Youth Employment Through Digital Career Pathways and Labour Market Intelligence.</p><p class="label"><b>Solution:</b> Career Passport, CareerGPS, Opportunity Marketplace, Skills Pathways and Labour Market Signal Layer.</p><p class="label"><b>Expected results:</b> increased youth access to work, improved employability, stronger training alignment and better labour-market intelligence.</p></div>
       <div class="card span-12"><div class="section-title"><h3>Social media campaign copy</h3><span class="pill">Youth sign-ups</span></div><div class="mini-grid"><div class="mini-card"><h4>Post 1</h4><p class="label">The problem is not that young people lack potential. The problem is that opportunities are scattered, hidden and difficult to trust. Jobs4Youth changes that with verified jobs, internships, skills pathways, CareerGPS and Career Passports.</p></div><div class="mini-card"><h4>Post 2</h4><p class="label">Stop applying blindly. Build your Career Passport, know your readiness score, identify skills gaps and find opportunities matched to you. That is Jobs4Youth.</p></div><div class="mini-card"><h4>Post 3</h4><p class="label">Africa does not have a youth problem. Africa has an opportunity connection problem. Jobs4Youth is building the bridge.</p></div></div></div>
     </div>
   `;
@@ -4021,7 +4045,7 @@ function impactEvidence() {
       </div>
 
       ${impactMetricCard('Youth reached', m.visibleYouthReached, 'Visible youth profile count from signal layer, or current youth profile where aggregate data is not yet available.', 'Reach')}
-      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for Mastercard-style inclusion reporting.', 'Inclusion')}
+      ${impactMetricCard('Young Women Reached', m.youngWomenReached, 'Mandatory Female youth profiles captured for funder-ready inclusion reporting.', 'Inclusion')}
       ${impactMetricCard('Young Men Reached', m.youngMenReached, 'Mandatory Male youth profiles captured for clean demographic reporting.', 'Inclusion')}
       ${impactMetricCard('Women Participation', `${m.womenParticipationRate}%`, 'Share of youth reached who are young women; target should stay at or above 50%.', 'Target 50%+')}
       ${impactMetricCard('Applications submitted', m.applicationsSubmitted, 'Applications visible to the current user or employer workspace.', 'Work pathway')}
@@ -4216,19 +4240,27 @@ function employerDash() {
 function postOpportunity() {
   return `
     <div class="card">
-      <div class="section-title"><h3>Post a new opportunity</h3><span class="pill">Professional form</span></div>
-      <p class="label">New opportunity posts are saved with status <b>Pending</b> until admin review.</p>
+      <div class="section-title"><h3>Post a new opportunity</h3><span class="pill">Required fields</span></div>
+      <p class="label">Complete all required fields. New opportunities are saved as <b>Pending</b> until admin verification.</p>
+      <div class="notice"><b>Quality rule:</b> Opportunities with missing deadline, compensation, work arrangement, duration, skills, education or description should not be submitted.</div>
       <div class="form" style="margin-top:14px">
-        <label class="full">Opportunity title<input id="oppTitle" placeholder="e.g. Agribusiness Internship Officer" /></label>
-        <label>Organization name<input id="oppOrg" placeholder="e.g. Green Harvest Ltd" value="${escapeHtml(state.profile.organizationName || '')}" /></label>
-        ${actionSelect('Country','oppCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-        <label>Region / City<input id="oppRegion" placeholder="e.g. Nairobi" value="${escapeHtml(state.profile.region || '')}" /></label>
-        ${actionSelect('Opportunity type','oppType', OPTION_SETS.opportunityTypes, '', 'Choose opportunity type')}
-        ${actionSelect('Education requirement','oppEducation', OPTION_SETS.educationLevels, '', 'Choose education requirement')}
-        ${actionSelect('Experience requirement','oppExperience', OPTION_SETS.experienceLevels, '', 'Choose experience requirement')}
-        <label>Required skills (comma separated)<input id="oppSkills" placeholder="e.g. food safety, packaging, record keeping" /></label>
-        <label class="full">Description<textarea id="oppDescription" placeholder="Describe responsibilities, duration, location, and who should apply."></textarea></label>
-        <button class="primary full" onclick="submitOpportunity()">Post opportunity</button>
+        <label class="full">Opportunity title *<input id="oppTitle" placeholder="e.g. Agribusiness Internship Officer" required /></label>
+        <label>Organization name *<input id="oppOrg" placeholder="e.g. Green Harvest Ltd" value="${escapeHtml(state.profile.organizationName || '')}" required /></label>
+        ${actionSelect('Country *','oppCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
+        <label>Region / City *<input id="oppRegion" placeholder="e.g. Blantyre" value="${escapeHtml(state.profile.region || '')}" required /></label>
+        ${actionSelect('Opportunity type *','oppType', OPTION_SETS.opportunityTypes, '', 'Choose opportunity type')}
+        ${actionSelect('Education requirement *','oppEducation', OPTION_SETS.educationLevels, '', 'Choose education requirement')}
+        ${actionSelect('Experience requirement *','oppExperience', OPTION_SETS.experienceLevels, '', 'Choose experience requirement')}
+        <label>Application deadline *<input id="oppDeadline" type="date" required /></label>
+        <label>Compensation *<select id="oppCompensation" required><option value="">Choose compensation</option><option>Paid</option><option>Stipend</option><option>Unpaid</option><option>Negotiable</option></select></label>
+        <label>Work arrangement *<select id="oppWorkArrangement" required><option value="">Choose arrangement</option><option>On-site</option><option>Remote</option><option>Hybrid</option></select></label>
+        <label>Duration *<input id="oppDuration" placeholder="e.g. 3 months, 6 months, permanent" required /></label>
+        <label class="full">Required skills *<input id="oppSkills" placeholder="e.g. food safety, packaging, record keeping" required /></label>
+        <label class="full">Benefits<input id="oppBenefits" placeholder="e.g. mentorship, transport allowance, practical training" /></label>
+        <label class="full">Learning outcomes<input id="oppLearningOutcomes" placeholder="e.g. interns will learn quality control, processing and reporting" /></label>
+        <label class="full">Application link or email<input id="oppApplicationLink" placeholder="e.g. https://... or hr@example.com" /></label>
+        <label class="full">Description *<textarea id="oppDescription" placeholder="Describe responsibilities, eligibility, location, application process and who should apply." required></textarea></label>
+        <button class="primary full" onclick="submitOpportunity()">Submit for verification</button>
         <div class="label full" id="oppMessage"></div>
       </div>
     </div>
@@ -4244,8 +4276,8 @@ window.submitOpportunity = async function() {
   if (userError || !user) { if (msg) msg.textContent = 'Please sign in first.'; return; }
   const profile = await ensureProfile(user);
   if (!profile || !['employer','admin'].includes(profile.role)) { if (msg) msg.textContent = 'Only employer or admin accounts can post opportunities.'; return; }
-  const payload = {
-    posted_by: user.id,
+
+  const required = {
     title: document.getElementById('oppTitle')?.value.trim() || '',
     organization_name: document.getElementById('oppOrg')?.value.trim() || '',
     country: document.getElementById('oppCountry')?.value || '',
@@ -4253,20 +4285,41 @@ window.submitOpportunity = async function() {
     opportunity_type: document.getElementById('oppType')?.value || '',
     education_requirement: document.getElementById('oppEducation')?.value || '',
     experience_requirement: document.getElementById('oppExperience')?.value || '',
+    deadline: document.getElementById('oppDeadline')?.value || '',
+    compensation: document.getElementById('oppCompensation')?.value || '',
+    work_arrangement: document.getElementById('oppWorkArrangement')?.value || '',
+    duration: document.getElementById('oppDuration')?.value.trim() || '',
     required_skills: document.getElementById('oppSkills')?.value.trim() || '',
-    description: document.getElementById('oppDescription')?.value.trim() || '',
-    status: 'Pending'
+    description: document.getElementById('oppDescription')?.value.trim() || ''
   };
-  if (!payload.title || !payload.organization_name || !payload.country || !payload.opportunity_type || !payload.description) {
-    if (msg) msg.textContent = 'Please fill in title, organization, country, type and description.';
+  const missing = Object.entries(required).filter(([_, value]) => !String(value || '').trim()).map(([key]) => key.replaceAll('_',' '));
+  if (missing.length) {
+    if (msg) msg.textContent = `Please complete required fields: ${missing.join(', ')}.`;
     return;
   }
-  const { data: inserted, error } = await supabase.from('opportunities').insert([payload]).select().single();
-  if (error) { console.error('Opportunity insert error:', error); if (msg) msg.textContent = `Failed to post opportunity: ${error.message}`; return; }
+  const payload = {
+    posted_by: user.id,
+    ...required,
+    benefits: document.getElementById('oppBenefits')?.value.trim() || null,
+    learning_outcomes: document.getElementById('oppLearningOutcomes')?.value.trim() || null,
+    application_link: document.getElementById('oppApplicationLink')?.value.trim() || null,
+    status: 'Pending',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  let insertResult = await supabase.from('opportunities').insert([payload]).select().single();
+  if (insertResult.error && /(benefits|learning_outcomes|application_link|deadline|compensation|work_arrangement|duration)/i.test(insertResult.error.message || '')) {
+    const { benefits, learning_outcomes, application_link, deadline, compensation, work_arrangement, duration, ...fallbackPayload } = payload;
+    insertResult = await supabase.from('opportunities').insert([fallbackPayload]).select().single();
+  }
+  if (insertResult.error) { console.error('Opportunity insert error:', insertResult.error); if (msg) msg.textContent = `Failed to post opportunity: ${insertResult.error.message}`; return; }
+  const inserted = insertResult.data;
   const { error: queueError } = await supabase.from('verification_queue').insert([{ profile_id: user.id, item_type: 'opportunity', item_id: inserted.id, review_status: 'Pending' }]);
   if (queueError) console.error('Verification queue insert error:', queueError);
   await loadJobsFromSupabase();
-  alert('✅ Opportunity posted successfully! It is now pending admin verification.');
+  await loadVerificationQueueFromSupabase();
+  alert('✅ Opportunity submitted successfully. It is now pending admin verification.');
   setView('dashboard');
 };
 
@@ -4398,9 +4451,22 @@ function verificationCard(item) {
       </div>
     `
     : '';
+  const missingOpportunityFields = item.itemType === 'opportunity' && item.opportunity
+    ? ['deadline','compensation','work_arrangement','duration','required_skills','education_requirement','experience_requirement','description']
+        .filter(field => !String(item.opportunity[field] || '').trim())
+    : [];
   const details = item.itemType === 'opportunity' && item.opportunity ? `
     <p><b>${escapeHtml(item.opportunity.title)}</b></p>
     <p class="label">${escapeHtml(item.opportunity.organization_name || '')} • ${escapeHtml(item.opportunity.region || '')}, ${escapeHtml(item.opportunity.country || '')}</p>
+    <div class="pathway-summary-row" style="margin-top:8px;">
+      <span class="pathway-summary-item"><b>Type:</b>&nbsp;${escapeHtml(item.opportunity.opportunity_type || 'Missing')}</span>
+      <span class="pathway-summary-item"><b>Deadline:</b>&nbsp;${escapeHtml(item.opportunity.deadline || 'Missing')}</span>
+      <span class="pathway-summary-item"><b>Compensation:</b>&nbsp;${escapeHtml(item.opportunity.compensation || 'Missing')}</span>
+      <span class="pathway-summary-item"><b>Work:</b>&nbsp;${escapeHtml(item.opportunity.work_arrangement || 'Missing')}</span>
+      <span class="pathway-summary-item"><b>Duration:</b>&nbsp;${escapeHtml(item.opportunity.duration || 'Missing')}</span>
+      <span class="pathway-summary-item"><b>Posted by:</b>&nbsp;${escapeHtml(item.ownerName || 'Not linked')}</span>
+    </div>
+    ${missingOpportunityFields.length ? `<div class="notice" style="margin-top:10px;"><b>Missing fields:</b> ${escapeHtml(missingOpportunityFields.join(', '))}</div>` : `<div class="soft-note" style="margin-top:10px;">All key opportunity fields are complete.</div>`}
   ` : item.itemType === 'course' && item.course ? `
     <p><b>${escapeHtml(item.course.title)}</b></p>
     <p class="label">${escapeHtml(item.course.provider_name || '')} • ${escapeHtml(item.course.region || '')}, ${escapeHtml(item.course.country || '')}</p>
@@ -4415,7 +4481,7 @@ function verificationCard(item) {
         <h3>${escapeHtml(title(item.itemType))} • ${escapeHtml(item.reviewStatus)}</h3>
         ${details}
         ${docSection}
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="reviewVerification('${item.id}','Approved')">Approve</button><button class="secondary" onclick="reviewVerification('${item.id}','Rejected')">Reject</button>` : ''}</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">${item.reviewStatus === 'Pending' ? `<button class="primary" onclick="reviewVerification('${item.id}','Approved')">Verify</button><button class="secondary" onclick="reviewVerification('${item.id}','Rejected')">Reject / Close</button>` : ''}</div>
       </div>
       <div class="fit" style="--score:${item.reviewStatus === 'Approved' ? 100 : item.reviewStatus === 'Rejected' ? 30 : 60}"><span>${item.reviewStatus === 'Approved' ? '✓' : item.reviewStatus === 'Rejected' ? '✕' : '…'}</span></div>
     </div>
@@ -4473,17 +4539,21 @@ window.reviewVerification = async function(queueId, decision) {
     if (error) { if (msg) msg.textContent = `Failed to update profile verification: ${error.message}`; return; }
   }
   if (item.itemType === 'opportunity' && item.itemId) {
-    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Rejected' };
+    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Closed' };
     const { error } = await supabase.from('opportunities').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update opportunity: ${error.message}`; return; }
   }
   if (item.itemType === 'course' && item.itemId) {
-    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Rejected' };
+    const updates = { updated_at: new Date().toISOString(), status: approved ? 'Verified' : 'Closed' };
     const { error } = await supabase.from('courses').update(updates).eq('id', item.itemId);
     if (error) { if (msg) msg.textContent = `Failed to update course: ${error.message}`; return; }
   }
-  const { error: queueError } = await supabase.from('verification_queue').update({ review_status: approved ? 'Approved' : 'Rejected', reviewer_id: currentUser.id, review_notes: note, updated_at: new Date().toISOString() }).eq('id', queueId);
-  if (queueError) { if (msg) msg.textContent = `Failed to update verification queue: ${queueError.message}`; return; }
+  if (!item.synthetic) {
+    const { error: queueError } = await supabase.from('verification_queue').update({ review_status: approved ? 'Approved' : 'Rejected', reviewer_id: currentUser.id, review_notes: note, updated_at: new Date().toISOString() }).eq('id', queueId);
+    if (queueError) { if (msg) msg.textContent = `Failed to update verification queue: ${queueError.message}`; return; }
+  } else if (item.profileId) {
+    await supabase.from('verification_queue').insert([{ profile_id: item.profileId, item_type: item.itemType, item_id: item.itemId, review_status: approved ? 'Approved' : 'Rejected', reviewer_id: currentUser.id, review_notes: note }]);
+  }
 
   const subject = approved
     ? `${title(item.itemType)} verification approved`
