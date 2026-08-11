@@ -22,8 +22,8 @@ const demoState = {
   view: 'dashboard',
   profile: {
     name: 'Amina Otieno',
-    country: 'Kenya',
-    region: 'Nakuru',
+    country: 'Malawi',
+    region: 'Lilongwe',
     education: 'Diploma',
     skills: 'food safety, dairy, record keeping, packaging, mobile money',
     interests: 'agri-processing, dairy, quality control',
@@ -2200,7 +2200,7 @@ function opportunities() {
     ${actionSelect('Country', 'oppFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="oppFilterCountry"', `<select id="oppFilterCountry" onchange="setOpportunityFilter('country', this.value)"`)}
     <label>
       Region / City
-      <input value="${escapeHtml(f.region)}" placeholder="e.g. Nairobi" oninput="setOpportunityFilter('region', this.value)" />
+      <input value="${escapeHtml(f.region)}" placeholder="e.g. Lilongwe" oninput="setOpportunityFilter('region', this.value)" />
     </label>
     ${actionSelect('Opportunity type', 'oppFilterType', OPTION_SETS.opportunityTypes, f.type, 'All opportunity types').replace('<select id="oppFilterType"', `<select id="oppFilterType" onchange="setOpportunityFilter('type', this.value)"`)}
     ${actionSelect('Education requirement', 'oppFilterEducation', OPTION_SETS.educationLevels, f.education, 'All education levels').replace('<select id="oppFilterEducation"', `<select id="oppFilterEducation" onchange="setOpportunityFilter('education', this.value)"`)}
@@ -2246,7 +2246,7 @@ function training() {
     ${actionSelect('Country', 'courseFilterCountry', OPTION_SETS.countries, f.country, 'All countries').replace('<select id="courseFilterCountry"', `<select id="courseFilterCountry" onchange="setCourseFilter('country', this.value)"`)}
     <label>
       Region / City
-      <input value="${escapeHtml(f.region)}" placeholder="e.g. Remote or Nairobi" oninput="setCourseFilter('region', this.value)" />
+      <input value="${escapeHtml(f.region)}" placeholder="e.g. Remote or Blantyre" oninput="setCourseFilter('region', this.value)" />
     </label>
     ${actionSelect('Delivery mode', 'courseFilterMode', OPTION_SETS.deliveryModes, f.mode, 'All delivery modes').replace('<select id="courseFilterMode"', `<select id="courseFilterMode" onchange="setCourseFilter('mode', this.value)"`)}
   `;
@@ -4508,7 +4508,7 @@ function postTraining() {
         ${actionSelect('Course type','courseType', OPTION_SETS.courseTypes, '', 'Choose course type')}
         <label>Duration<input id="courseDuration" placeholder="e.g. 6 weeks" /></label>
         ${actionSelect('Country','courseCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
-        <label>Region / City *<input id="courseRegion" placeholder="e.g. Nairobi / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
+        <label>Region / City *<input id="courseRegion" placeholder="e.g. Mzuzu / Remote" value="${escapeHtml(state.profile.region || '')}" /></label>
         <label class="full">Skills * covered (comma separated)<input id="courseSkills" placeholder="e.g. agronomy, records, mobile money" /></label>
         <button class="primary full" onclick="submitCourse()">Post training</button>
         <div class="label full" id="courseMessage"></div>
