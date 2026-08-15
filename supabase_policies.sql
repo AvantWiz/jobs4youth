@@ -7,6 +7,20 @@ alter table public.applications enable row level security;
 alter table public.verification_queue enable row level security;
 alter table public.audit_logs enable row level security;
 
+-- Public profile-photo bucket. Uploads are restricted below to each user's folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'profile-photos',
+  'profile-photos',
+  true,
+  5242880,
+  array['image/jpeg','image/png','image/webp']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 -- Clean old policies if rerunning
 
 do $$ begin
@@ -38,6 +52,39 @@ do $$ begin
   drop policy if exists "Users can insert audit logs" on public.audit_logs;
   drop policy if exists "Admins can view audit logs" on public.audit_logs;
 exception when undefined_object then null; end $$;
+
+drop policy if exists "Public can view profile photos" on storage.objects;
+drop policy if exists "Users can upload own profile photos" on storage.objects;
+drop policy if exists "Users can update own profile photos" on storage.objects;
+drop policy if exists "Users can delete own profile photos" on storage.objects;
+
+create policy "Public can view profile photos" on storage.objects
+for select using (bucket_id = 'profile-photos');
+
+create policy "Users can upload own profile photos" on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can update own profile photos" on storage.objects
+for update to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can delete own profile photos" on storage.objects
+for delete to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 -- Profiles
 create policy "Users can view profiles" on public.profiles

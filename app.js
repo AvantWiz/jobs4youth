@@ -33,6 +33,7 @@ const demoState = {
     dateOfBirth: '',
     organizationName: '',
     sector: '',
+    profilePhotoUrl: '',
     verified: false
   },
   jobs: [],
@@ -191,6 +192,40 @@ window.clearCourseFilters = function() {
 
 function sanitizeFileName(name) {
   return String(name || 'document').replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+function profileInitials(name) {
+  return String(name || 'J4Y')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part.charAt(0).toUpperCase())
+    .join('') || 'J4Y';
+}
+function profilePhotoMarkup(url, name, className = 'profile-photo') {
+  return url
+    ? `<img class="${escapeHtml(className)}" src="${escapeHtml(url)}" alt="${escapeHtml(name || 'Profile photo')}" loading="lazy" referrerpolicy="no-referrer" />`
+    : `<span class="${escapeHtml(className)} profile-photo-fallback" aria-label="${escapeHtml(name || 'Profile')}">${escapeHtml(profileInitials(name))}</span>`;
+}
+function profilePhotoUploader() {
+  return `
+    <div class="full profile-photo-editor">
+      <div id="profilePhotoPreview" class="profile-photo-preview">
+        ${profilePhotoMarkup(state.profile?.profilePhotoUrl, state.profile?.name, 'profile-photo profile-photo-large')}
+      </div>
+      <div class="profile-photo-controls">
+        <label>
+          Profile photo
+          <input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" onchange="previewProfilePhoto(event)" />
+        </label>
+        <p class="label">JPG, PNG or WebP. Maximum 5 MB. Square photos work best.</p>
+        <div class="hero-actions">
+          <button class="secondary" type="button" onclick="uploadProfilePhoto()">Upload photo</button>
+          ${state.profile?.profilePhotoUrl ? '<button class="secondary" type="button" onclick="removeProfilePhoto()">Remove photo</button>' : ''}
+        </div>
+        <div class="label" id="profilePhotoMessage"></div>
+      </div>
+    </div>
+  `;
 }
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -964,6 +999,7 @@ function syncProfileToState(profile) {
     dateOfBirth: profile.date_of_birth || profile.dateOfBirth || '',
     organizationName: profile.organization_name || '',
     sector: profile.sector || '',
+    profilePhotoUrl: profile.profile_photo_url || '',
     verified: !!profile.verified
   };
 }
@@ -2295,6 +2331,7 @@ function training() {
 function youthProfileForm() {
   return `
     <div class="form">
+      ${profilePhotoUploader()}
       <label>Name<input id="profileName" value="${escapeHtml(state.profile.name || '')}"/></label>
       ${actionSelect('Country','profileCountry', OPTION_SETS.countries, state.profile.country, 'Choose country')}
       <label>Region / City *<input id="profileRegion" value="${escapeHtml(state.profile.region || '')}"/></label>
@@ -2334,6 +2371,7 @@ function organizationProfileForm(label) {
     : `<div class="soft-note">No verification documents uploaded yet. Upload at least one supporting document to strengthen verification review.</div>`;
   return `
     <div class="form">
+      ${profilePhotoUploader()}
       <label>Contact person / name<input id="orgProfileName" value="${escapeHtml(state.profile.name || '')}"/></label>
       <label>${escapeHtml(label)}<input id="orgName" value="${escapeHtml(state.profile.organizationName || '')}"/></label>
       ${actionSelect('Sector','orgSector', OPTION_SETS.sectors, state.profile.sector, 'Choose sector')}
@@ -2344,6 +2382,24 @@ function organizationProfileForm(label) {
         <div class="label" style="margin-top:8px;">${escapeHtml(verificationText)}</div>
       </div>
       ${decisionMessage}
+      <label class="full">
+  Organisation Logo / Profile Photo
+  <input
+    type="file"
+    id="profilePhoto"
+    accept="image/*"
+  />
+</label>
+
+<div id="profilePhotoPreview" class="full"></div>
+
+<button
+  class="secondary"
+  type="button"
+  onclick="uploadProfilePhoto()"
+>
+  Upload Photo
+</button>
       <button class="primary full" onclick="saveOrganizationProfile()">Save organisation profile</button>
       <div class="full verification-docs-panel">
         <div class="section-title"><div><h3>Verification documents</h3><p class="label">${escapeHtml(documentUploadGuidance(state.role))}</p></div><span class="pill">Private upload</span></div>
@@ -3633,7 +3689,10 @@ function communityPostCard(post) {
           <div>
             <div class="results-meta">
               ${communityPostTypeBadge(post.postType || post.post_type)}
-              <span class="pill">${escapeHtml(getCommunityAuthorName(post))}</span>
+              <span class="community-author">
+                ${profilePhotoMarkup(post.profilePhotoUrl || post.profile_photo_url, getCommunityAuthorName(post), 'profile-photo profile-photo-small')}
+                <span>${escapeHtml(getCommunityAuthorName(post))}</span>
+              </span>
               <span class="pill">${escapeHtml(post.createdAt || post.created_at ? new Date(post.createdAt || post.created_at).toLocaleString() : 'Just now')}</span>
             </div>
             <h3 style="margin-top:8px;">${escapeHtml(post.title || communityTitleFromType(post.postType || post.post_type))}</h3>
@@ -3688,7 +3747,7 @@ async function loadCommunityFromSupabase() {
     let likes = [];
     let comments = [];
     if (userIds.length) {
-      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').in('id', userIds);
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, role, profile_photo_url').in('id', userIds);
       profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
     }
     if (postIds.length) {
@@ -3701,7 +3760,7 @@ async function loadCommunityFromSupabase() {
     if (commentUserIds.length) {
       const missing = commentUserIds.filter(id => !profileMap[id]);
       if (missing.length) {
-        const { data: commentProfiles } = await supabase.from('profiles').select('id, full_name, role').in('id', missing);
+        const { data: commentProfiles } = await supabase.from('profiles').select('id, full_name, role, profile_photo_url').in('id', missing);
         (commentProfiles || []).forEach(p => { profileMap[p.id] = p; });
       }
     }
@@ -3709,6 +3768,7 @@ async function loadCommunityFromSupabase() {
       id: post.id,
       userId: post.user_id,
       authorName: profileMap[post.user_id]?.full_name || 'Jobs4Youth member',
+      profilePhotoUrl: profileMap[post.user_id]?.profile_photo_url || '',
       postType: post.post_type || 'General Update',
       content: post.content || '',
       visibility: post.visibility || 'Public',
@@ -5217,6 +5277,87 @@ async function signOut() {
   render();
   alert('Signed out.');
 }
+
+window.previewProfilePhoto = function(event) {
+  const file = event?.target?.files?.[0];
+  const preview = document.getElementById('profilePhotoPreview');
+  if (!file || !preview) return;
+  if (!file.type.startsWith('image/')) {
+    event.target.value = '';
+    return alert('Please choose a JPG, PNG or WebP image.');
+  }
+  const objectUrl = URL.createObjectURL(file);
+  preview.innerHTML = `<img class="profile-photo profile-photo-large" src="${escapeHtml(objectUrl)}" alt="Selected profile photo preview" />`;
+};
+
+window.uploadProfilePhoto = async function () {
+  try {
+    if (!isConfigured || !supabase || !currentUser) return alert('Please sign in first.');
+    const fileInput = document.getElementById('profilePhoto');
+    const file = fileInput?.files?.[0];
+    const message = document.getElementById('profilePhotoMessage');
+    if (!file) return alert('Select a photo first.');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) return alert('Please choose a JPG, PNG or WebP image.');
+    if (file.size > 5 * 1024 * 1024) return alert('Profile photos must be 5 MB or smaller.');
+    if (message) message.textContent = 'Uploading photo...';
+
+    const extensionByType = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+    const storagePath = `${currentUser.id}/avatar-${Date.now()}.${extensionByType[file.type]}`;
+    const { error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(storagePath, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage.from('profile-photos').getPublicUrl(storagePath);
+    const photoUrl = publicUrlData?.publicUrl || '';
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ profile_photo_url: photoUrl, updated_at: new Date().toISOString() })
+      .eq('id', currentUser.id);
+    if (profileError) {
+      await supabase.storage.from('profile-photos').remove([storagePath]);
+      throw profileError;
+    }
+
+    const previousUrl = state.profile?.profilePhotoUrl || '';
+    state.profile.profilePhotoUrl = photoUrl;
+    if (previousUrl && previousUrl !== photoUrl) {
+      const marker = '/profile-photos/';
+      const oldPath = decodeURIComponent(previousUrl.split(marker)[1]?.split('?')[0] || '');
+      if (oldPath.startsWith(`${currentUser.id}/`)) {
+        await supabase.storage.from('profile-photos').remove([oldPath]);
+      }
+    }
+    render();
+    alert('Profile photo updated successfully.');
+  } catch (err) {
+    console.error('Profile photo upload error:', err);
+    alert(`Could not upload photo: ${err.message || 'Unknown error'}`);
+  }
+};
+
+window.removeProfilePhoto = async function() {
+  if (!isConfigured || !supabase || !currentUser) return alert('Please sign in first.');
+  try {
+    const previousUrl = state.profile?.profilePhotoUrl || '';
+    const { error } = await supabase
+      .from('profiles')
+      .update({ profile_photo_url: null, updated_at: new Date().toISOString() })
+      .eq('id', currentUser.id);
+    if (error) throw error;
+    const marker = '/profile-photos/';
+    const oldPath = decodeURIComponent(previousUrl.split(marker)[1]?.split('?')[0] || '');
+    if (oldPath.startsWith(`${currentUser.id}/`)) {
+      await supabase.storage.from('profile-photos').remove([oldPath]);
+    }
+    state.profile.profilePhotoUrl = '';
+    render();
+  } catch (err) {
+    console.error('Profile photo removal error:', err);
+    alert(`Could not remove photo: ${err.message || 'Unknown error'}`);
+  }
+};
 
 window.saveProfile = async function () {
   if (!isConfigured) return alert('Supabase not connected');

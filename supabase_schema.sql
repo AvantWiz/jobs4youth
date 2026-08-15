@@ -16,10 +16,14 @@ create table if not exists public.profiles (
   experience_level text,
   organization_name text,
   sector text,
+  profile_photo_url text,
   verified boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table public.profiles
+  add column if not exists profile_photo_url text;
 
 create table if not exists public.opportunities (
   id uuid primary key default gen_random_uuid(),

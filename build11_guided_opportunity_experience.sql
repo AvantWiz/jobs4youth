@@ -3,13 +3,6 @@
 -- Purpose:
 --   Add durable draft/application session storage for the new youth-facing
 --   shortlist + readiness + guided application workflow.
---
--- Run AFTER:
---   1. supabase_schema.sql
---   2. supabase_policies.sql
---   3. jobs4youth_full_product_foundation.sql
---   4. build9_phase1_shared_foundation.sql (recommended)
---   5. build10_pathway_twin.sql (recommended)
 
 create extension if not exists pgcrypto;
 

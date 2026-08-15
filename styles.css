@@ -656,3 +656,54 @@
 .mini-card{
   transition:all .25s ease;
 }
+.profile-photo-editor {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid rgba(46, 93, 39, .16);
+  border-radius: 18px;
+  background: rgba(246, 250, 243, .8);
+}
+.profile-photo-preview {
+  flex: 0 0 auto;
+}
+.profile-photo-controls {
+  flex: 1;
+  min-width: 0;
+}
+.profile-photo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #dfead8;
+  color: #244d20;
+  font-weight: 800;
+  box-shadow: 0 3px 12px rgba(31, 62, 28, .16);
+  vertical-align: middle;
+}
+.profile-photo-large {
+  width: 112px;
+  height: 112px;
+  font-size: 28px;
+}
+.profile-photo-small {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+.community-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .profile-photo-editor {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
